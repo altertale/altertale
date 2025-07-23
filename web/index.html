@@ -1,339 +1,108 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="/altertale/">
 
-  <!-- Basic Meta Tags -->
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="Altertale ile kitaplarınızı dijital ortamda okuyun. Güvenli, hızlı ve kullanıcı dostu e-kitap platformu.">
-  <meta name="keywords" content="e-kitap, dijital kitap, online okuma, Türkçe kitap, roman, hikaye, edebiyat">
-  <meta name="author" content="Altertale">
-  <meta name="robots" content="index, follow">
-  <meta name="language" content="tr">
-  <meta name="theme-color" content="#1976D2">
-  <meta name="msapplication-TileColor" content="#1976D2">
-
-  <!-- Mobile Web App Meta Tags -->
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Altertale - E-kitap Platformu">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Altertale">
-  <meta name="format-detection" content="telephone=no">
-
-  <!-- Open Graph Meta Tags -->
-  <meta property="og:title" content="Altertale – Sadece Uygulama İçi Okuma">
-  <meta property="og:description" content="Altertale ile kitaplarınızı dijital ortamda okuyun. Güvenli, hızlı ve kullanıcı dostu e-kitap platformu.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://altertale.com">
-  <meta property="og:image" content="https://altertale.com/images/og-image.png">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Altertale - E-Kitap Platformu">
-  <meta property="og:site_name" content="Altertale">
-  <meta property="og:locale" content="tr_TR">
-
-  <!-- Twitter Card Meta Tags -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Altertale – Sadece Uygulama İçi Okuma">
-  <meta name="twitter:description" content="Altertale ile kitaplarınızı dijital ortamda okuyun. Güvenli, hızlı ve kullanıcı dostu e-kitap platformu.">
-  <meta name="twitter:image" content="https://altertale.com/images/twitter-image.png">
-  <meta name="twitter:site" content="@altertale">
-  <meta name="twitter:creator" content="@altertale">
-
-  <!-- Security Headers -->
-  <meta http-equiv="X-Frame-Options" content="DENY">
-  <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <meta http-equiv="X-XSS-Protection" content="1; mode=block">
-  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="android-chrome-192x192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="android-chrome-512x512.png">
-  <link rel="mask-icon" href="safari-pinned-tab.svg" color="#1976D2">
-
-  <!-- Web App Manifest -->
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
   <link rel="manifest" href="manifest.json">
-
-  <!-- Preload Critical Resources -->
-  <link rel="preload" href="flutter_bootstrap.js" as="script">
-  <link rel="preload" href="assets/fonts/Roboto-Regular.ttf" as="font" type="font/ttf" crossorigin>
-  <link rel="preload" href="assets/fonts/Roboto-Bold.ttf" as="font" type="font/ttf" crossorigin>
-
-  <!-- DNS Prefetch -->
-  <link rel="dns-prefetch" href="//fonts.googleapis.com">
-  <link rel="dns-prefetch" href="//fonts.gstatic.com">
-  <link rel="dns-prefetch" href="//cdn.altertale.com">
-
-  <!-- Title -->
-  <title>Altertale – Sadece Uygulama İçi Okuma</title>
-
-  <!-- Structured Data -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "Altertale",
-    "description": "Sadece Uygulama İçi Okuma",
-    "url": "https://altertale.com",
-    "applicationCategory": "BookApplication",
-    "operatingSystem": "Web",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "TRY"
-    },
-    "author": {
-      "@type": "Organization",
-      "name": "Altertale"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "Altertale"
+  
+  <title>Altertale</title>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #1976D2 0%, #42A5F5 100%);
+      font-family: 'Roboto', sans-serif;
     }
-  }
-  </script>
-
-  <!-- Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js')
-          .then(function(registration) {
-            console.log('ServiceWorker registration successful with scope: ', registration.scope);
-          })
-          .catch(function(error) {
-            console.log('ServiceWorker registration failed: ', error);
-          });
-      });
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
     }
-  </script>
-
-  <!-- Performance Monitoring -->
-  <script>
-    // Performance monitoring
-    window.addEventListener('load', function() {
-      if ('performance' in window) {
-        const perfData = performance.getEntriesByType('navigation')[0];
-        console.log('Page load time:', perfData.loadEventEnd - perfData.loadEventStart, 'ms');
-      }
-    });
-  </script>
-
-  <!-- Error Tracking -->
-  <script>
-    window.addEventListener('error', function(e) {
-      console.error('JavaScript error:', e.error);
-      // TODO: Send to error tracking service
-    });
-  </script>
-</head>
-<body>
-  <!-- Loading Screen -->
-  <div id="loading" style="
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, #1976D2 0%, #42A5F5 100%);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    color: white;
-    font-family: 'Roboto', sans-serif;
-  ">
-    <div style="
-      width: 80px;
-      height: 80px;
+    
+    .spinner {
+      width: 60px;
+      height: 60px;
       border: 4px solid rgba(255,255,255,0.3);
       border-top: 4px solid white;
       border-radius: 50%;
       animation: spin 1s linear infinite;
       margin-bottom: 20px;
-    "></div>
-    <h1 style="margin: 0; font-size: 24px; font-weight: 300;">Altertale</h1>
-    <p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.8;">Yükleniyor...</p>
-  </div>
-
-  <!-- Flutter App Container -->
-  <div id="flutter_app"></div>
-
-  <!-- Flutter Bootstrap Script -->
-  <script>
-    // Enhanced Flutter initialization for GitHub Pages
-    function initializeFlutter() {
-      if (typeof _flutter !== 'undefined') {
-        _flutter.loader.loadEntrypoint({
-          serviceWorker: {
-            serviceWorkerVersion: serviceWorkerVersion,
-          },
-          onEntrypointLoaded: function(engineInitializer) {
-            engineInitializer.initializeEngine().then(function(appRunner) {
-              appRunner.runApp();
-              // Remove loading screen
-              const loading = document.getElementById('loading');
-              if (loading) {
-                loading.style.opacity = '0';
-                loading.style.transition = 'opacity 0.5s ease-out';
-                setTimeout(function() {
-                  loading.style.display = 'none';
-                }, 500);
-              }
-            });
-          }
-        });
-      } else {
-        // Fallback: Try to load flutter.js manually
-        const script = document.createElement('script');
-        script.src = 'flutter.js';
-        script.onload = function() {
-          setTimeout(initializeFlutter, 100);
-        };
-        script.onerror = function() {
-          console.error('Failed to load Flutter');
-          document.getElementById('loading').innerHTML = 
-            '<h1>Yükleme Hatası</h1><p>Sayfa yeniden yükleniyor...</p>';
-          setTimeout(function() {
-            window.location.reload();
-          }, 3000);
-        };
-        document.head.appendChild(script);
-      }
     }
-
-    // Start initialization
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initializeFlutter);
-    } else {
-      initializeFlutter();
-    }
-  </script>
-
-  <!-- Service Worker Version -->
-  <script>
-    var serviceWorkerVersion = null;
-    var scriptLoaded = false;
-    function loadMainDartJs() {
-      if (scriptLoaded) {
-        return;
-      }
-      scriptLoaded = true;
-      var scriptTag = document.createElement('script');
-      scriptTag.src = 'main.dart.js';
-      scriptTag.type = 'application/javascript';
-      document.body.append(scriptTag);
-    }
-
-    if ('serviceWorker' in navigator) {
-      // Service workers are supported. Use them.
-      window.addEventListener('load', function () {
-        // Wait for registration to finish before dropping the <script> tag.
-        // Otherwise, the browser will load the script multiple times,
-        // potentially different versions.
-        var serviceWorkerUrl = 'flutter_service_worker.js?v=' + serviceWorkerVersion;
-        navigator.serviceWorker.register(serviceWorkerUrl)
-          .then((reg) => {
-            function waitForActivation(serviceWorker) {
-              serviceWorker.addEventListener('statechange', () => {
-                if (serviceWorker.state == 'activated') {
-                  console.log('Installed new service worker.');
-                  loadMainDartJs();
-                }
-              });
-            }
-            if (!reg.active && (reg.installing || reg.waiting)) {
-              // No active web worker and we have installed or are installing
-              // one for the first time. Simply wait for it to activate.
-              waitForActivation(reg.installing || reg.waiting);
-            } else if (!reg.active.scriptURL.endsWith(serviceWorkerVersion)) {
-              // When the app updates the serviceWorkerVersion changes, so we
-              // need to ask the service worker to update.
-              console.log('New service worker available.');
-              reg.update();
-              waitForActivation(reg.installing);
-            } else {
-              // Existing service worker is still good.
-              console.log('Loading app from service worker.');
-              loadMainDartJs();
-            }
-          });
-
-        // If service worker doesn't succeed in a reasonable amount of time,
-        // fallback to plaint <script> tag.
-        setTimeout(() => {
-          if (!scriptLoaded) {
-            console.warn(
-              'Failed to load app from service worker. Falling back to plain <script> tag.',
-            );
-            loadMainDartJs();
-          }
-        }, 4000);
-      });
-    } else {
-      // Service workers not supported. Just drop the <script> tag.
-      loadMainDartJs();
-    }
-  </script>
-
-  <!-- Loading Screen Removal -->
-  <script>
-    window.addEventListener('load', function() {
-      const loading = document.getElementById('loading');
-      if (loading) {
-        loading.style.opacity = '0';
-        loading.style.transition = 'opacity 0.5s ease-out';
-        setTimeout(function() {
-          loading.style.display = 'none';
-        }, 500);
-      }
-    });
-  </script>
-
-  <!-- CSS for Loading Animation -->
-  <style>
+    
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-
-    /* Prevent text selection during loading */
-    #loading {
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
+    
+    .app-title {
+      font-size: 24px;
+      font-weight: 300;
+      margin: 0;
     }
-
-    /* Responsive design for loading screen */
-    @media (max-width: 768px) {
-      #loading h1 {
-        font-size: 20px !important;
-      }
-      #loading p {
-        font-size: 12px !important;
-      }
+    
+    .app-subtitle {
+      font-size: 14px;
+      opacity: 0.8;
+      margin: 10px 0 0 0;
     }
   </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <h1 class="app-title">Altertale</h1>
+    <p class="app-subtitle">Yükleniyor...</p>
+  </div>
+
+  <script>
+    window.addEventListener('load', function(ev) {
+      // Download main.dart.js
+      _flutter.loader.loadEntrypoint({
+        serviceWorker: {
+          serviceWorkerVersion: null,
+        }
+      }).then(function(engineInitializer) {
+        return engineInitializer.initializeEngine();
+      }).then(function(appRunner) {
+        return appRunner.runApp();
+      }).then(function(app) {
+        // Remove loading screen
+        const loading = document.getElementById('loading');
+        if (loading) {
+          loading.style.opacity = '0';
+          loading.style.transition = 'opacity 0.5s ease-out';
+          setTimeout(() => loading.remove(), 500);
+        }
+      }).catch(function(e) {
+        console.error('Flutter initialization failed:', e);
+        const loading = document.getElementById('loading');
+        loading.innerHTML = `
+          <div class="spinner"></div>
+          <h1 class="app-title">Yükleme Hatası</h1>
+          <p class="app-subtitle">Sayfa yeniden yükleniyor...</p>
+        `;
+        setTimeout(() => window.location.reload(), 3000);
+      });
+    });
+  </script>
+  <script src="flutter.js" defer></script>
 </body>
 </html>
