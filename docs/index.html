@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <base href="/altertale/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Altertale - E-kitap Platformu">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Altertale">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="manifest" href="manifest.json">
+  
+  <title>Altertale</title>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #1976D2 0%, #42A5F5 100%);
+      font-family: 'Roboto', sans-serif;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+    
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .app-title {
+      font-size: 24px;
+      font-weight: 300;
+      margin: 0;
+    }
+    
+    .app-subtitle {
+      font-size: 14px;
+      opacity: 0.8;
+      margin: 10px 0 0 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <h1 class="app-title">Altertale</h1>
+    <p class="app-subtitle">Yükleniyor...</p>
+  </div>
+
+  <script>
+    window.addEventListener('load', function(ev) {
+      console.log('Starting Flutter initialization...');
+      
+      // Use Flutter's standard bootstrap
+      _flutter.loader.load({
+        serviceWorkerSettings: {
+          serviceWorkerVersion: null,
+        }
+      }).then(function(engineInitializer) {
+        console.log('Flutter engine initializing...');
+        return engineInitializer.initializeEngine();
+      }).then(function(appRunner) {
+        console.log('Running Flutter app...');
+        return appRunner.runApp();
+      }).then(function(app) {
+        console.log('Flutter app started successfully!');
+        // Remove loading screen
+        const loading = document.getElementById('loading');
+        if (loading) {
+          loading.style.opacity = '0';
+          loading.style.transition = 'opacity 0.5s ease-out';
+          setTimeout(() => loading.remove(), 500);
+        }
+      }).catch(function(e) {
+        console.error('Flutter initialization failed:', e);
+        const loading = document.getElementById('loading');
+        loading.innerHTML = `
+          <div class="spinner"></div>
+          <h1 class="app-title">Yükleme Hatası</h1>
+          <p class="app-subtitle">Console'da detayları görün. Sayfa yenileniyor...</p>
+        `;
+        setTimeout(() => window.location.reload(), 5000);
+      });
+    });
+  </script>
+  <script src="flutter.js" defer></script>
+</body>
+</html>
