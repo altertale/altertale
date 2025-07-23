@@ -8,6 +8,7 @@ import 'providers/book_provider.dart';
 import 'providers/favorites_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/mybooks_provider.dart';
+import 'providers/rating_provider.dart';
 import 'utils/auth_wrapper.dart';
 import 'screens/cart/cart_screen.dart';
 import 'screens/checkout/checkout_screen.dart';
@@ -92,6 +93,12 @@ class AlterTaleApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => MyBooksProvider(),
           lazy: false, // Initialize immediately for MyBooks data
+        ),
+
+        /// Rating Provider - Book rating and review management
+        ChangeNotifierProvider(
+          create: (context) => RatingProvider(),
+          lazy: false, // Initialize immediately for rating data
         ),
       ],
       child: Consumer<ThemeProvider>(

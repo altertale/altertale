@@ -83,7 +83,6 @@ app.*.map.json
 **/windows/flutter/generated_plugin_registrant.h
 
 # Web related
-lib/generated_plugin_registrant.dart
 
 # Coverage
 coverage/
