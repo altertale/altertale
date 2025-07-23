@@ -4,14 +4,19 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/book_model.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/rating_provider.dart';
 import '../../widgets/books/book_card.dart';
 import 'package:go_router/go_router.dart';
 import "../../widgets/books/book_purchase_button.dart";
 import '../../widgets/books/preview_reader.dart';
 import '../../widgets/comments/book_comments_section.dart';
+import '../../widgets/rating/star_rating_widget.dart';
+import '../../models/rating_model.dart';
+import '../../services/advanced_share_service.dart';
 import 'reading_screen.dart';
 import '../../widgets/purchase/purchase_confirmation_dialog.dart';
 import '../../services/purchase_service.dart';
+import '../../widgets/rating/rating_display_widget.dart';
 
 /// Kitap detay ekranı - kitap hakkında detaylı bilgi gösterir
 class BookDetailScreen extends StatefulWidget {
@@ -27,15 +32,44 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   BookModel? _book;
   List<BookModel> _similarBooks = [];
   bool _isLoading = true;
-  bool _isPurchased =
-      false; // TODO: Kullanıcının satın alıp almadığını kontrol et
+  bool _isPurchased = false;
   String? _error;
   List<String> _bookPages = [];
+
+  // Rating related state
+  BookRatingStats? _ratingStats;
+  Rating? _userRating;
+  bool _isLoadingRating = true;
 
   @override
   void initState() {
     super.initState();
     _loadBookDetails();
+    _loadRatingData();
+  }
+
+  /// Load rating data for the book
+  Future<void> _loadRatingData() async {
+    try {
+      final ratingProvider = context.read<RatingProvider>();
+
+      // Load book rating stats and user rating in parallel
+      final futures = await Future.wait([
+        ratingProvider.loadBookRatingStats(widget.bookId),
+        ratingProvider.loadUserRating(widget.bookId),
+      ]);
+
+      setState(() {
+        _ratingStats = futures[0] as BookRatingStats;
+        _userRating = futures[1] as Rating?;
+        _isLoadingRating = false;
+      });
+    } catch (e) {
+      print('Error loading rating data: $e');
+      setState(() {
+        _isLoadingRating = false;
+      });
+    }
   }
 
   /// Kitap detaylarını yükler
@@ -96,7 +130,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   }
 
   void _startReading(BookModel book) {
-    if (book == null) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ReadingScreen(book: book, pages: _bookPages),
@@ -244,9 +277,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       ),
       actions: [
         IconButton(
-          onPressed: () {
-            // TODO: Paylaş işlemi
-          },
+          onPressed: () => _showShareOptions(context),
           icon: const Icon(Icons.share),
         ),
         IconButton(
@@ -306,34 +337,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           const SizedBox(height: 16),
 
           // Puan ve yorum sayısı
-          Row(
-            children: [
-              Icon(Icons.star, color: Colors.amber[600], size: 20),
-              const SizedBox(width: 4),
-              Text(
-                _book!.formattedRating,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '(${_book!.formattedRatingCount})',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.hintColor,
-                ),
-              ),
-              const Spacer(),
-              Icon(Icons.visibility, color: theme.hintColor, size: 16),
-              const SizedBox(width: 4),
-              Text(
-                _book!.formattedReadCount,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.hintColor,
-                ),
-              ),
-            ],
-          ),
+          _buildRatingSection(context),
         ],
       ),
     );
@@ -791,6 +795,450 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Build rating section with interactive rating
+  Widget _buildRatingSection(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (_isLoadingRating) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Puanlar yükleniyor...',
+            style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Overall rating display
+        if (_ratingStats != null && _ratingStats!.totalRatings > 0) ...[
+          RatingDisplayWidget(
+            rating: _ratingStats!.averageRating,
+            totalRatings: _ratingStats!.totalRatings,
+            starSize: 20,
+            fontSize: 16,
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // User rating section
+        _buildUserRatingSection(context),
+
+        // Book stats
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Icon(Icons.visibility, color: theme.hintColor, size: 16),
+            const SizedBox(width: 4),
+            Text(
+              _book!.formattedReadCount,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Build user rating section
+  Widget _buildUserRatingSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final authProvider = context.watch<AuthProvider>();
+
+    if (!authProvider.isAuthenticated) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.star_outline, color: theme.hintColor, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Puanlamak için giriş yapın',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border.all(color: theme.dividerColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _userRating != null ? 'Puanınız' : 'Bu kitabı puanlayın',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              StarRatingWidget(
+                initialRating: _userRating?.rating ?? 0.0,
+                onRatingChanged: _onRatingChanged,
+                size: 28,
+                filledColor: Colors.amber,
+                unfilledColor: Colors.grey.shade300,
+              ),
+              const SizedBox(width: 12),
+              if (_userRating != null) ...[
+                Text(
+                  _getRatingText(_userRating!.rating),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (context.watch<RatingProvider>().isSubmitting) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Puanınız kaydediliyor...',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Handle rating change
+  void _onRatingChanged(double rating) async {
+    final ratingProvider = context.read<RatingProvider>();
+
+    final success = await ratingProvider.submitRating(widget.bookId, rating);
+
+    if (success) {
+      // Refresh rating data
+      await _loadRatingData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Puanınız kaydedildi: ${_getRatingText(rating)}'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Puan kaydedilemedi. Lütfen tekrar deneyin.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Get rating text description
+  String _getRatingText(double rating) {
+    switch (rating.round()) {
+      case 1:
+        return 'Beğenmedim';
+      case 2:
+        return 'Fena değil';
+      case 3:
+        return 'İyi';
+      case 4:
+        return 'Çok iyi';
+      case 5:
+        return 'Mükemmel!';
+      default:
+        return '';
+    }
+  }
+
+  /// Show share options dialog
+  void _showShareOptions(BuildContext context) {
+    if (_book == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) =>
+          _ShareOptionsBottomSheet(book: _book!, ratingStats: _ratingStats),
+    );
+  }
+}
+
+/// Share options bottom sheet
+class _ShareOptionsBottomSheet extends StatelessWidget {
+  final BookModel book;
+  final BookRatingStats? ratingStats;
+
+  const _ShareOptionsBottomSheet({required this.book, this.ratingStats});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Title
+          Text(
+            'Kitabı Paylaş',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Book info
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: book.coverImageUrl,
+                  width: 50,
+                  height: 70,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.book, color: Colors.grey),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.book, color: Colors.grey),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      book.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      book.author,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.hintColor,
+                      ),
+                    ),
+                    if (ratingStats != null &&
+                        ratingStats!.totalRatings > 0) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${ratingStats!.averageRating.toStringAsFixed(1)} (${ratingStats!.totalRatings})',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Share options
+          Column(
+            children: [
+              _ShareOptionTile(
+                icon: Icons.share,
+                title: 'Genel Paylaşım',
+                subtitle: 'Mevcut tüm uygulamalar',
+                onTap: () {
+                  Navigator.pop(context);
+                  AdvancedShareService.shareBook(
+                    book,
+                    ratingStats: ratingStats,
+                  );
+                },
+              ),
+              _ShareOptionTile(
+                icon: Icons.message,
+                title: 'WhatsApp',
+                subtitle: 'WhatsApp ile paylaş',
+                color: const Color(0xFF25D366),
+                onTap: () {
+                  Navigator.pop(context);
+                  AdvancedShareService.shareBook(
+                    book,
+                    ratingStats: ratingStats,
+                    platform: SharePlatform.whatsapp,
+                  );
+                },
+              ),
+              _ShareOptionTile(
+                icon: Icons.camera_alt,
+                title: 'Instagram',
+                subtitle: 'Instagram Stories için kopyala',
+                color: const Color(0xFFE4405F),
+                onTap: () {
+                  Navigator.pop(context);
+                  AdvancedShareService.shareBook(
+                    book,
+                    ratingStats: ratingStats,
+                    platform: SharePlatform.instagram,
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Instagram için metin kopyalandı!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+              _ShareOptionTile(
+                icon: Icons.alternate_email,
+                title: 'Twitter',
+                subtitle: 'Twitter\'da paylaş',
+                color: const Color(0xFF1DA1F2),
+                onTap: () {
+                  Navigator.pop(context);
+                  AdvancedShareService.shareBook(
+                    book,
+                    ratingStats: ratingStats,
+                    platform: SharePlatform.twitter,
+                  );
+                },
+              ),
+              _ShareOptionTile(
+                icon: Icons.copy,
+                title: 'Linki Kopyala',
+                subtitle: 'Panoya kopyala',
+                onTap: () {
+                  Navigator.pop(context);
+                  final text =
+                      '''
+📚 "${book.title}" - ${book.author}
+
+AlterTale'de keşfedin: https://altertale.github.io/altertale
+'''
+                          .trim();
+                  AdvancedShareService.copyToClipboard(text);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Link kopyalandı!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+/// Share option tile widget
+class _ShareOptionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color? color;
+  final VoidCallback onTap;
+
+  const _ShareOptionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: (color ?? theme.colorScheme.primary).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: color ?? theme.colorScheme.primary, size: 24),
+      ),
+      title: Text(
+        title,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+      ),
+      onTap: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 }

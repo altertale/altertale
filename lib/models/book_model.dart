@@ -215,6 +215,11 @@ class BookModel {
     return averageRating.toStringAsFixed(1);
   }
 
+  /// Genre compatibility - returns first category
+  String get genre {
+    return categories.isNotEmpty ? categories.first : 'Genel';
+  }
+
   /// Fiyat formatını döndürür (örn: ₺25.99)
   String get formattedPrice {
     return '₺${price.toStringAsFixed(2)}';
