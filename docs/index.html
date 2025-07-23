@@ -102,9 +102,9 @@
         loading.innerHTML = `
           <div class="spinner"></div>
           <h1 class="app-title">Yükleme Hatası</h1>
-          <p class="app-subtitle">Console'da detayları görün. Sayfa yenileniyor...</p>
+          <p class="app-subtitle">Console'da detayları kontrol edin. Sayfayı manuel olarak yenileyin.</p>
         `;
-        setTimeout(() => window.location.reload(), 5000);
+        // Removed auto-reload to prevent infinite refresh loop
       });
     });
   </script>
