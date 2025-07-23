@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <base href="/altertale/">
+  <base href="/altertale/docs/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
   <link rel="manifest" href="manifest.json">
   
-  <title>Altertale</title>
+  <title>Altertale v1.1.0</title>
   
   <style>
     body {
@@ -63,20 +63,27 @@
       opacity: 0.8;
       margin: 10px 0 0 0;
     }
+    
+    .version {
+      font-size: 12px;
+      opacity: 0.6;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <div class="loading" id="loading">
     <div class="spinner"></div>
     <h1 class="app-title">Altertale</h1>
-    <p class="app-subtitle">Yükleniyor...</p>
+    <p class="app-subtitle">v1.1.0 Enhanced Shopping Cart Version</p>
+    <p class="version">Yükleniyor...</p>
   </div>
 
   <script>
     window.addEventListener('load', function(ev) {
-      console.log('Starting Flutter initialization...');
+      console.log('🚀 Starting Flutter v1.1.0 initialization...');
       
-      // Initialize Flutter with buildConfig
+      // Initialize Flutter with buildConfig for v1.1.0
       window._flutter = window._flutter || {};
       window._flutter.buildConfig = {
         builds: [{
@@ -86,18 +93,18 @@
         }]
       };
       
-      // Load Flutter engine
+      // Load Flutter engine with v1.1.0 configuration
       _flutter.loader.load({
         config: {
           canvasKitBaseUrl: "canvaskit/",
         },
         onEntrypointLoaded: function(engineInitializer) {
-          console.log('Flutter engine initializing...');
+          console.log('🔧 Flutter v1.1.0 engine initializing...');
           return engineInitializer.initializeEngine().then(function(appRunner) {
-            console.log('Running Flutter app...');
+            console.log('▶️ Running Flutter v1.1.0 app...');
             return appRunner.runApp();
           }).then(function(app) {
-            console.log('Flutter app started successfully!');
+            console.log('✅ Flutter v1.1.0 app started successfully!');
             // Remove loading screen
             const loading = document.getElementById('loading');
             if (loading) {
@@ -108,14 +115,14 @@
           });
         }
       }).catch(function(e) {
-        console.error('Flutter initialization failed:', e);
+        console.error('❌ Flutter v1.1.0 initialization failed:', e);
         const loading = document.getElementById('loading');
         loading.innerHTML = `
           <div class="spinner"></div>
-          <h1 class="app-title">Yükleme Hatası</h1>
-          <p class="app-subtitle">Console'da detayları kontrol edin. Sayfayı manuel olarak yenileyin.</p>
+          <h1 class="app-title">v1.1.0 Yükleme Hatası</h1>
+          <p class="app-subtitle">Console'da detayları kontrol edin.</p>
+          <p class="version">Sayfa manuel olarak yenilenmeli.</p>
         `;
-        // Removed auto-reload to prevent infinite refresh loop
       });
     });
   </script>
