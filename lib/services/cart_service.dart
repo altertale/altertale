@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/cart_item.dart';
-import '../models/book.dart';
+import '../models/book_model.dart';
+import 'purchase_service.dart';
 
 /// Cart Service for Firestore Operations
 ///
@@ -11,12 +12,14 @@ import '../models/book.dart';
 /// - Quantity management
 /// - Price calculations
 /// - User-specific cart operations
+/// - Prevention of duplicate purchases
 class CartService {
   static final CartService _instance = CartService._internal();
   factory CartService() => _instance;
   CartService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final PurchaseService _purchaseService = PurchaseService();
   static const String _cartCollection = 'carts';
 
   // ==================== REAL-TIME CART STREAMS ====================
@@ -72,7 +75,7 @@ class CartService {
 
   /// Add book to cart or show message if already exists
   Future<void> addToCart({
-    required Book book,
+    required BookModel book,
     required String userId,
     int quantity = 1,
   }) async {
@@ -81,6 +84,15 @@ class CartService {
         print(
           '🛒 CartService: Adding book to cart: ${book.title} (qty: $quantity)',
         );
+      }
+
+      // Check if book is already purchased
+      final isPurchased = await _purchaseService.isBookPurchased(book.id);
+      if (isPurchased) {
+        if (kDebugMode) {
+          print('🛒 CartService: Book already purchased: ${book.title}');
+        }
+        throw 'Bu kitap zaten satın alınmış! Kütüphanenizden okuyabilirsiniz.';
       }
 
       // Check if book already exists in cart
@@ -94,12 +106,8 @@ class CartService {
         throw 'Bu kitap zaten sepete eklendi!';
       } else {
         // Add new item to cart with quantity 1 for digital books
-        final cartItem = CartItem.fromBook(
-          bookId: book.id,
-          title: book.title,
-          author: book.author,
-          imageUrl: book.coverImageUrl,
-          price: book.price,
+        final cartItem = CartItem.fromBookModel(
+          book: book,
           userId: userId,
           quantity: 1, // Always 1 for digital books
         );

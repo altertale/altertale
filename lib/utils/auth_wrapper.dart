@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/login_screen.dart';
-import '../screens/home_screen.dart'; // Use the full-featured HomeScreen
+import '../screens/home_screen.dart';
 
 /// Authentication Wrapper
 /// Kullanıcının giriş durumuna göre otomatik yönlendirme yapar
@@ -68,7 +68,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
           return const AuthLoadingScreen();
         }
 
-        // Kullanıcı giriş yapmışsa ana sayfa, yapmamışsa giriş sayfası
+        // Original auth logic: show HomeScreen if logged in, LoginScreen if not
         if (authProvider.isLoggedIn) {
           return const HomeScreen();
         } else {
@@ -99,45 +99,47 @@ class AuthLoadingScreen extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
+                color: theme.colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
                 Icons.auto_stories,
                 size: 40,
-                color: theme.colorScheme.onPrimary,
+                color: theme.colorScheme.primary,
               ),
             ),
-
             const SizedBox(height: 24),
 
             // App Name
             Text(
               'AlterTale',
               style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 8),
 
+            // Subtitle
             Text(
-              'Alternatif Hikayeler Dünyası',
+              'Hikayeler Dünyası',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
 
             // Loading Indicator
-            CircularProgressIndicator(color: theme.colorScheme.primary),
-
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                theme.colorScheme.primary,
+              ),
+            ),
             const SizedBox(height: 16),
 
+            // Loading Text
             Text(
-              'Yükleniyor...',
+              'Başlatılıyor...',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

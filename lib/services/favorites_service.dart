@@ -1,9 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/book_model.dart';
 
-/// Favorites Service - Manages user favorites
+/// Favorites Service - Manages user favorites with web compatibility
 class FavoritesService {
   static final FavoritesService _instance = FavoritesService._internal();
   factory FavoritesService() => _instance;
@@ -17,18 +16,45 @@ class FavoritesService {
   // In-memory storage for demo favorites
   static final Map<String, Set<String>> _demoFavorites = {};
 
+  /// Safe conversion for web compatibility
+  List<String> _safeStringListFromPrefs(List<String>? rawList) {
+    if (rawList == null) return [];
+
+    try {
+      // Handle both native List<String> and web JSArray<String>
+      return rawList.map((item) {
+        if (item is String) {
+          return item;
+        } else {
+          return item.toString();
+        }
+      }).toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ FavoritesService: Error converting string list: $e');
+      }
+      return [];
+    }
+  }
+
   /// Initialize favorites from SharedPreferences
   Future<void> _initializeFavorites(String userId) async {
     if (_demoFavorites.containsKey(userId)) return;
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final favoritesJson = prefs.getStringList('favorites_$userId') ?? [];
-      _demoFavorites[userId] = favoritesJson.toSet();
+      final favoritesJson = prefs.getStringList('favorites_$userId');
+
+      // Safely convert to List<String> to handle web JSArray<String> issue
+      final favoritesList = favoritesJson != null
+          ? favoritesJson.map((item) => item.toString()).toList()
+          : <String>[];
+
+      _demoFavorites[userId] = favoritesList.toSet();
 
       if (kDebugMode) {
         print(
-          '💖 FavoritesService: Loaded ${favoritesJson.length} favorites from storage for user: $userId',
+          '💖 FavoritesService: Loaded ${favoritesList.length} favorites from storage for user: $userId',
         );
       }
     } catch (e) {
@@ -39,16 +65,20 @@ class FavoritesService {
     }
   }
 
-  /// Save favorites to SharedPreferences
+  /// Save favorites to SharedPreferences with web compatibility
   Future<void> _saveFavorites(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final favorites = _demoFavorites[userId]?.toList() ?? [];
-      await prefs.setStringList('favorites_$userId', favorites);
+
+      // Ensure all items are properly typed as String for web compatibility
+      final safeFavorites = favorites.map((item) => item.toString()).toList();
+
+      await prefs.setStringList('favorites_$userId', safeFavorites);
 
       if (kDebugMode) {
         print(
-          '💖 FavoritesService: Saved ${favorites.length} favorites to storage for user: $userId',
+          '💖 FavoritesService: Saved ${safeFavorites.length} favorites to storage for user: $userId',
         );
       }
     } catch (e) {

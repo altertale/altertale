@@ -4,6 +4,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/profile/profile_service.dart';
 import '../../models/user_profile_model.dart';
 import '../../widgets/widgets.dart';
+import '../../widgets/profile/profile_stats_widget.dart';
 
 /// Profile Screen - Kullanıcı Profili Ekranı
 ///
@@ -270,6 +271,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 32),
 
+            // Profile Statistics Section
+            const ProfileStatsWidget(
+              showDetailed: true,
+              padding: EdgeInsets.zero,
+            ),
+
+            const SizedBox(height: 32),
+
             // Action Buttons Section
             _buildActionButtonsSection(theme),
 
@@ -479,7 +488,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               prefixIcon: const Icon(Icons.person),
               enabled: _isEditing,
               // Add placeholder when no name is available
-              hintText: _currentProfile?.fullName?.isEmpty == true
+              hintText: _currentProfile?.fullName.isEmpty == true
                   ? 'Adınızı girin'
                   : null,
             ),
@@ -535,7 +544,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(width: 8),
                 SubtitleText(
-                  'Üyelik: ${_formatDate(_currentProfile!.createdAt!)}',
+                  'Üyelik: ${_formatDate(_currentProfile!.createdAt)}',
                   size: SubtitleSize.small,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

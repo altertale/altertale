@@ -1,33 +1,27 @@
 import 'package:flutter/foundation.dart';
-import 'dart:async';
 import '../models/book_model.dart';
 import '../services/book_service.dart';
 
-/// Book Provider - Manages book data and state with performance optimizations
 class BookProvider with ChangeNotifier {
   final BookService _bookService = BookService();
 
-  // State variables
   List<BookModel> _books = [];
   List<BookModel> _featuredBooks = [];
   List<BookModel> _popularBooks = [];
   List<BookModel> _newBooks = [];
   List<BookModel> _searchResults = [];
-  List<String> _categories = [];
-  List<String> _authors = [];
 
   bool _isLoading = false;
-  String? _error;
-  int _currentPage = 1;
-  bool _hasMoreBooks = true;
+  bool _isLoadingFeatured = false;
+  bool _isLoadingPopular = false;
+  bool _isLoadingNew = false;
+  bool _isSearching = false;
 
-  // Performance optimization variables
-  DateTime? _lastFeaturedBooksLoad;
-  DateTime? _lastCategoriesLoad;
-  Timer? _debounceTimer;
-  final Map<String, List<BookModel>> _searchCache = {};
-  final Map<String, DateTime> _searchCacheTime = {};
-  static const int cacheValidityMinutes = 5;
+  String? _error;
+  String? _featuredError;
+  String? _popularError;
+  String? _newError;
+  String? _searchError;
 
   // Getters
   List<BookModel> get books => _books;
@@ -35,49 +29,47 @@ class BookProvider with ChangeNotifier {
   List<BookModel> get popularBooks => _popularBooks;
   List<BookModel> get newBooks => _newBooks;
   List<BookModel> get searchResults => _searchResults;
-  List<String> get categories => _categories;
-  List<String> get authors => _authors;
 
   bool get isLoading => _isLoading;
-  String? get error => _error;
-  int get currentPage => _currentPage;
-  bool get hasMoreBooks => _hasMoreBooks;
-  bool get hasCachedFeaturedBooks =>
-      _lastFeaturedBooksLoad != null &&
-      DateTime.now().difference(_lastFeaturedBooksLoad!).inMinutes <
-          cacheValidityMinutes;
+  bool get isLoadingFeatured => _isLoadingFeatured;
+  bool get isLoadingPopular => _isLoadingPopular;
+  bool get isLoadingNew => _isLoadingNew;
+  bool get isSearching => _isSearching;
 
-  /// Load books with pagination
+  String? get error => _error;
+  String? get featuredError => _featuredError;
+  String? get popularError => _popularError;
+  String? get newError => _newError;
+  String? get searchError => _searchError;
+
+  /// Load all books
   Future<void> loadBooks({
     int page = 1,
     int limit = 20,
     String? category,
-    String? searchQuery,
+    String? search,
   }) async {
-    if (_isLoading) return;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
 
     try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
       final books = await _bookService.getBooks(
         page: page,
         limit: limit,
         category: category,
-        searchQuery: searchQuery,
+        search: search,
       );
 
-      final bookModels = books.map((book) => BookModel.fromBook(book)).toList();
-
       if (page == 1) {
-        _books = bookModels;
+        _books = books;
       } else {
-        _books.addAll(bookModels);
+        _books.addAll(books);
       }
 
-      _currentPage = page;
-      _hasMoreBooks = books.length == limit;
+      if (kDebugMode) {
+        print('📚 BookProvider: Loaded ${books.length} books');
+      }
     } catch (e) {
       _error = e.toString();
       if (kDebugMode) {
@@ -89,166 +81,211 @@ class BookProvider with ChangeNotifier {
     }
   }
 
-  /// Load featured books with caching
-  Future<void> loadFeaturedBooks({bool forceRefresh = false}) async {
-    // Check cache validity
-    if (!forceRefresh && hasCachedFeaturedBooks && _featuredBooks.isNotEmpty) {
-      if (kDebugMode) {
-        print('📚 BookProvider: Using cached featured books');
-      }
-      return;
-    }
+  /// Load featured books
+  Future<void> loadFeaturedBooks({int limit = 10}) async {
+    _isLoadingFeatured = true;
+    _featuredError = null;
+    notifyListeners();
 
     try {
-      _isLoading = true;
-      if (_featuredBooks.isEmpty) {
-        notifyListeners(); // Only notify if we don't have data
-      }
-
-      final books = await _bookService.getFeaturedBooks();
-      _featuredBooks = books.map((book) => BookModel.fromBook(book)).toList();
-      _lastFeaturedBooksLoad = DateTime.now();
-
+      _featuredBooks = await _bookService.getFeaturedBooks(limit: limit);
       if (kDebugMode) {
         print(
           '📚 BookProvider: Loaded ${_featuredBooks.length} featured books',
         );
       }
     } catch (e) {
-      _error = e.toString();
+      _featuredError = e.toString();
       if (kDebugMode) {
         print('❌ BookProvider: Error loading featured books: $e');
       }
     } finally {
-      _isLoading = false;
+      _isLoadingFeatured = false;
       notifyListeners();
     }
   }
 
   /// Load popular books
   Future<void> loadPopularBooks() async {
+    _isLoadingPopular = true;
+    _popularError = null;
+    notifyListeners();
+
     try {
-      final books = await _bookService.getPopularBooks();
-      _popularBooks = books.map((book) => BookModel.fromBook(book)).toList();
-      notifyListeners();
+      _popularBooks = await _bookService.getPopularBooks();
+      if (kDebugMode) {
+        print('📚 BookProvider: Loaded ${_popularBooks.length} popular books');
+      }
     } catch (e) {
-      _error = e.toString();
+      _popularError = e.toString();
       if (kDebugMode) {
         print('❌ BookProvider: Error loading popular books: $e');
       }
+    } finally {
+      _isLoadingPopular = false;
       notifyListeners();
     }
   }
 
   /// Load new books
   Future<void> loadNewBooks() async {
+    _isLoadingNew = true;
+    _newError = null;
+    notifyListeners();
+
     try {
-      final books = await _bookService.getNewBooks();
-      _newBooks = books.map((book) => BookModel.fromBook(book)).toList();
-      notifyListeners();
+      _newBooks = await _bookService.getNewBooks();
+      if (kDebugMode) {
+        print('📚 BookProvider: Loaded ${_newBooks.length} new books');
+      }
     } catch (e) {
-      _error = e.toString();
+      _newError = e.toString();
       if (kDebugMode) {
         print('❌ BookProvider: Error loading new books: $e');
       }
+    } finally {
+      _isLoadingNew = false;
       notifyListeners();
     }
   }
 
-  /// Load categories
-  Future<void> loadCategories() async {
-    try {
-      _categories = await _bookService.getAllCategories();
-      _lastCategoriesLoad = DateTime.now();
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      if (kDebugMode) {
-        print('❌ BookProvider: Error loading categories: $e');
-      }
-      notifyListeners();
-    }
-  }
-
-  /// Load authors
-  Future<void> loadAuthors() async {
-    try {
-      _authors = await _bookService.getAllAuthors();
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      if (kDebugMode) {
-        print('❌ BookProvider: Error loading authors: $e');
-      }
-      notifyListeners();
-    }
-  }
-
-  /// Search books with debouncing and caching
-  Future<void> searchBooks(String query, {int debounceMs = 500}) async {
-    // Cancel previous timer
-    _debounceTimer?.cancel();
-
-    // Check cache first
-    final cacheKey = query.toLowerCase().trim();
-    if (_searchCache.containsKey(cacheKey) &&
-        _searchCacheTime.containsKey(cacheKey)) {
-      final cacheTime = _searchCacheTime[cacheKey]!;
-      if (DateTime.now().difference(cacheTime).inMinutes <
-          cacheValidityMinutes) {
-        _searchResults = _searchCache[cacheKey]!;
-        notifyListeners();
-        if (kDebugMode) {
-          print('📚 BookProvider: Using cached search results for: $query');
-        }
-        return;
-      }
-    }
-
-    // Debounce the search
-    _debounceTimer = Timer(Duration(milliseconds: debounceMs), () async {
-      await _performSearch(query);
-    });
-  }
-
-  /// Perform the actual search
-  Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) {
-      _searchResults = [];
-      notifyListeners();
-      return;
-    }
+  /// Search books by query with optional debounce
+  Future<void> searchBooks(String query, {int? debounceMs}) async {
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
 
     try {
-      _isLoading = true;
-      notifyListeners();
+      // If debounceMs is provided and greater than 0, add debounce
+      if (debounceMs != null && debounceMs > 0) {
+        await Future.delayed(Duration(milliseconds: debounceMs));
+      }
 
-      final books = await _bookService.getBooks(
-        page: 1,
-        limit: 20,
-        searchQuery: query,
-      );
-
-      _searchResults = books.map((book) => BookModel.fromBook(book)).toList();
-
-      // Cache the results
-      final cacheKey = query.toLowerCase().trim();
-      _searchCache[cacheKey] = _searchResults;
-      _searchCacheTime[cacheKey] = DateTime.now();
-
+      _searchResults = await _bookService.searchBooks(query);
       if (kDebugMode) {
         print(
-          '📚 BookProvider: Found ${_searchResults.length} books for: $query',
+          '📚 BookProvider: Found ${_searchResults.length} books for "$query"',
         );
       }
     } catch (e) {
-      _error = e.toString();
+      _searchError = e.toString();
       if (kDebugMode) {
         print('❌ BookProvider: Error searching books: $e');
       }
     } finally {
-      _isLoading = false;
+      _isSearching = false;
       notifyListeners();
+    }
+  }
+
+  /// Clear search results
+  void clearSearchResults() {
+    _searchResults = [];
+    _searchError = null;
+    notifyListeners();
+  }
+
+  /// Clear search results (alternative name for backward compatibility)
+  void clearSearch() {
+    clearSearchResults();
+  }
+
+  /// Get categories from loaded books
+  List<String> get categories {
+    final allCategories = <String>{};
+    for (final bookList in [_books, _featuredBooks, _popularBooks, _newBooks]) {
+      for (final book in bookList) {
+        allCategories.addAll(book.categories);
+      }
+    }
+    return allCategories.toList()..sort();
+  }
+
+  /// Get book by ID
+  Future<BookModel?> getBookById(String bookId) async {
+    try {
+      // First check if book is already in loaded books
+      for (final bookList in [
+        _books,
+        _featuredBooks,
+        _popularBooks,
+        _newBooks,
+        _searchResults,
+      ]) {
+        final existingBook = bookList.firstWhereOrNull(
+          (book) => book.id == bookId,
+        );
+        if (existingBook != null) {
+          if (kDebugMode) {
+            print(
+              '📚 BookProvider: Found book in cache: ${existingBook.title}',
+            );
+          }
+          return existingBook;
+        }
+      }
+
+      // If not found in cache, fetch from service
+      final book = await _bookService.getBookById(bookId);
+      if (kDebugMode) {
+        print(
+          '📚 BookProvider: Fetched book from service: ${book?.title ?? 'Not found'}',
+        );
+      }
+      return book;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ BookProvider: Error getting book by ID: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Get books by category
+  Future<List<BookModel>> getBooksByCategory(String category) async {
+    try {
+      return await _bookService.getBooksByCategory(category);
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ BookProvider: Error getting books by category: $e');
+      }
+      return [];
+    }
+  }
+
+  /// Get books by author
+  Future<List<BookModel>> getBooksByAuthor(String author) async {
+    try {
+      return await _bookService.getBooksByAuthor(author);
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ BookProvider: Error getting books by author: $e');
+      }
+      return [];
+    }
+  }
+
+  /// Get similar books
+  Future<List<BookModel>> getSimilarBooks(String bookId) async {
+    try {
+      return await _bookService.getSimilarBooks(bookId);
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ BookProvider: Error getting similar books: $e');
+      }
+      return [];
+    }
+  }
+
+  /// Get free books
+  Future<List<BookModel>> getFreeBooks() async {
+    try {
+      return await _bookService.getFreeBooks();
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ BookProvider: Error getting free books: $e');
+      }
+      return [];
     }
   }
 
@@ -259,60 +296,39 @@ class BookProvider with ChangeNotifier {
       loadFeaturedBooks(),
       loadPopularBooks(),
       loadNewBooks(),
-      loadCategories(),
-      loadAuthors(),
     ]);
   }
 
-  /// Get book by ID
-  Future<BookModel?> getBookById(String bookId) async {
-    try {
-      final book = await _bookService.getBookById(bookId);
-      return book != null ? BookModel.fromBook(book) : null;
-    } catch (e) {
-      _error = e.toString();
-      if (kDebugMode) {
-        print('❌ BookProvider: Error getting book by ID: $e');
-      }
-      return null;
-    }
-  }
-
-  /// Get similar books
-  Future<List<BookModel>> getSimilarBooks(String bookId) async {
-    try {
-      final books = await _bookService.getSimilarBooks(bookId);
-      return books.map((book) => BookModel.fromBook(book)).toList();
-    } catch (e) {
-      _error = e.toString();
-      if (kDebugMode) {
-        print('❌ BookProvider: Error getting similar books: $e');
-      }
-      return [];
-    }
-  }
-
-  /// Clear search results
-  void clearSearch() {
+  /// Reset all data
+  void reset() {
+    _books = [];
+    _featuredBooks = [];
+    _popularBooks = [];
+    _newBooks = [];
     _searchResults = [];
+
+    _isLoading = false;
+    _isLoadingFeatured = false;
+    _isLoadingPopular = false;
+    _isLoadingNew = false;
+    _isSearching = false;
+
     _error = null;
+    _featuredError = null;
+    _popularError = null;
+    _newError = null;
+    _searchError = null;
+
     notifyListeners();
   }
+}
 
-  /// Clear all caches
-  void clearCaches() {
-    _searchCache.clear();
-    _searchCacheTime.clear();
-    _lastFeaturedBooksLoad = null;
-    _lastCategoriesLoad = null;
-    if (kDebugMode) {
-      print('📚 BookProvider: Cleared all caches');
+// Extension to add firstWhereOrNull method if not already available
+extension ListExtension<T> on List<T> {
+  T? firstWhereOrNull(bool Function(T) test) {
+    for (T element in this) {
+      if (test(element)) return element;
     }
-  }
-
-  @override
-  void dispose() {
-    _debounceTimer?.cancel();
-    super.dispose();
+    return null;
   }
 }

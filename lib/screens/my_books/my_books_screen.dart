@@ -30,6 +30,7 @@ class _MyBooksScreenState extends State<MyBooksScreen>
   late TabController _tabController;
   final int _selectedTabIndex = 0;
   bool _isLoading = true;
+  String? _error;
   final FavoritesService _favoritesService = FavoritesService();
   final OrderService _orderService = OrderService();
   final PurchaseService _purchaseService = PurchaseService();
@@ -38,6 +39,7 @@ class _MyBooksScreenState extends State<MyBooksScreen>
   List<BookModel> _favoriteBooks = [];
   List<BookModel> _purchasedBooks = [];
   List<BookModel> _readingHistory = [];
+  List<BookModel> _allBooks = [];
 
   @override
   void initState() {
@@ -153,10 +155,7 @@ class _MyBooksScreenState extends State<MyBooksScreen>
       final favoritesProvider = context.read<FavoritesProvider>();
 
       // Refresh favorites from provider
-      await favoritesProvider.refreshFavorites(
-        authProvider.userId,
-        bookProvider,
-      );
+      await favoritesProvider.refreshFavorites();
 
       // Update local favorites list
       if (mounted) {
@@ -177,113 +176,40 @@ class _MyBooksScreenState extends State<MyBooksScreen>
     super.dispose();
   }
 
-  Future<void> _loadUserBooks() async {
+  Future<void> _loadData() async {
     final authProvider = context.read<AuthProvider>();
-    if (!authProvider.isLoggedIn) return;
-
     final bookProvider = context.read<BookProvider>();
     final favoritesProvider = context.read<FavoritesProvider>();
 
-    // Initialize favorites provider
-    await favoritesProvider.initializeFavorites(
-      authProvider.userId,
-      bookProvider,
-    );
+    if (!authProvider.isLoggedIn) return;
 
-    // Get favorites from provider
-    _favoriteBooks = favoritesProvider.favoriteBooks;
-
-    // Load real purchased books from orders
-    try {
-      final orders = await _orderService.getOrdersForUser(authProvider.userId);
-      final purchasedBookIds = <String>{};
-
-      // Extract book IDs from completed orders
-      for (final order in orders) {
-        for (final item in order.items) {
-          purchasedBookIds.add(item.bookId);
-        }
-      }
-
-      final allBooks = bookProvider.books;
-
-      _purchasedBooks = allBooks
-          .where((book) => purchasedBookIds.contains(book.id))
-          .toList();
-
-      print(
-        '📚 MyBooksScreen: Loaded ${_purchasedBooks.length} purchased books from ${orders.length} orders',
-      );
-
-      // If no purchased books but we have orders, use demo fallback
-      if (_purchasedBooks.isEmpty && orders.isNotEmpty) {
-        _purchasedBooks = allBooks.take(2).toList();
-        print('📚 MyBooksScreen: Using demo purchased books fallback');
-      }
-    } catch (e) {
-      debugPrint('Error loading purchased books: $e');
-      // Fallback to demo data
-      final bookProvider = context.read<BookProvider>();
-      if (bookProvider.books.isNotEmpty) {
-        _purchasedBooks = bookProvider.books.take(2).toList();
-      } else {
-        _purchasedBooks = _generateMockBooks('Purchased');
-      }
-    }
-
-    // Load real reading history from progress service
-    try {
-      final readingProgressService = ReadingProgressService();
-      final recentProgress = await readingProgressService.getRecentlyReadBooks(
-        userId: authProvider.userId,
-        limit: 10,
-      );
-      final bookProvider = context.read<BookProvider>();
-
-      _readingHistory = recentProgress.map((progress) {
-        // Find the book in BookProvider
-        final book = bookProvider.books.firstWhere(
-          (b) => b.id == progress.bookId,
-          orElse: () => BookModel(
-            id: progress.bookId,
-            title: 'Bilinmeyen Kitap',
-            author: 'Bilinmeyen Yazar',
-            description: 'Açıklama yok',
-            coverImageUrl: 'https://via.placeholder.com/150x200',
-            categories: ['Genel'],
-            tags: [],
-            price: 0.0,
-            points: 0,
-            averageRating: 0.0,
-            ratingCount: 0,
-            readCount: 0,
-            pageCount: progress.totalPages,
-            language: 'tr',
-            createdAt: DateTime.now(),
-            updatedAt: progress.lastReadAt,
-            isPublished: true,
-            isFeatured: false,
-            isPopular: false,
-            previewStart: 0,
-            previewEnd: 0,
-            pointPrice: 0,
-          ),
-        );
-        return book;
-      }).toList();
-
-      print(
-        '📚 MyBooksScreen: Loaded ${_readingHistory.length} reading history items',
-      );
-    } catch (e) {
-      debugPrint('Error loading reading history: $e');
-      // Fallback to mock data
-      _readingHistory = _generateMockBooks('History');
-    }
+    if (!mounted) return;
 
     setState(() {
-      _isLoading = false;
+      _isLoading = true;
+      _error = null;
     });
+
+    try {
+      // Load data in parallel
+      await Future.wait([bookProvider.loadBooks(), favoritesProvider.init()]);
+
+      if (!mounted) return;
+
+      // Update local state
+      _favoriteBooks = favoritesProvider.favoriteBooks;
+      _allBooks = bookProvider.books;
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = e.toString();
+      });
+    }
   }
 
   List<BookModel> _generateMockBooks(String type) {
@@ -467,18 +393,7 @@ class _MyBooksScreenState extends State<MyBooksScreen>
   void _handleBookTap(BuildContext context, BookModel book, String type) {
     if (type == 'purchased') {
       // Purchased books → Navigate to ReaderScreen
-      final bookForReader = Book(
-        id: book.id,
-        title: book.title,
-        author: book.author,
-        description: book.description,
-        coverImageUrl: book.coverImageUrl,
-        category: book.categories.isNotEmpty ? book.categories.first : 'Genel',
-        price: book.price,
-        createdAt: book.createdAt,
-        updatedAt: book.updatedAt,
-        content: book.content, // Include content for reading
-      );
+      final bookForReader = BookModel.fromBook(book);
 
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -715,8 +630,8 @@ class _MyBooksScreenState extends State<MyBooksScreen>
       // Check if book is purchased
       final purchaseService = PurchaseService();
       final isPurchased = await purchaseService.hasUserPurchasedBook(
-        userId: authProvider.userId,
-        bookId: book.id,
+        authProvider.userId,
+        book.id,
       );
 
       if (!isPurchased) {
@@ -769,17 +684,7 @@ class _MyBooksScreenState extends State<MyBooksScreen>
   // Method to start reading
   void _startReading(BookModel book) {
     // Convert BookModel to Book for compatibility
-    final bookForReader = Book(
-      id: book.id,
-      title: book.title,
-      author: book.author,
-      description: book.description,
-      coverImageUrl: book.coverImageUrl,
-      category: book.categories.isNotEmpty ? book.categories.first : 'Genel',
-      price: book.price,
-      createdAt: book.createdAt,
-      updatedAt: book.updatedAt,
-    );
+    final bookForReader = BookModel.fromBook(book);
 
     Navigator.of(context).pushNamed(
       '/reader',
@@ -849,5 +754,87 @@ class _MyBooksScreenState extends State<MyBooksScreen>
     } else {
       return '${(difference / 30).floor()} ay önce';
     }
+  }
+
+  Future<void> _loadUserBooks() async {
+    final authProvider = context.read<AuthProvider>();
+    final bookProvider = context.read<BookProvider>();
+    final favoritesProvider = context.read<FavoritesProvider>();
+
+    if (!authProvider.isLoggedIn) return;
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      // Load data in parallel
+      await Future.wait([bookProvider.loadBooks(), favoritesProvider.init()]);
+
+      if (!mounted) return;
+
+      // Update local state
+      _favoriteBooks = favoritesProvider.favoriteBooks;
+      _allBooks = bookProvider.books;
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _refreshData() async {
+    final authProvider = context.read<AuthProvider>();
+    final bookProvider = context.read<BookProvider>();
+    final favoritesProvider = context.read<FavoritesProvider>();
+
+    if (!authProvider.isLoggedIn) return;
+
+    try {
+      // Refresh data
+      await Future.wait([
+        bookProvider.loadBooks(),
+        favoritesProvider.refreshFavorites(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _favoriteBooks = favoritesProvider.favoriteBooks;
+          _allBooks = bookProvider.books;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Yenileme hatası: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadInitialData() async {
+    final authProvider = context.read<AuthProvider>();
+    final bookProvider = context.read<BookProvider>();
+    final favoritesProvider = context.read<FavoritesProvider>();
+
+    await bookProvider.loadBooks();
+    await favoritesProvider.init();
+
+    _allBooks = bookProvider.books;
+    _favoriteBooks = favoritesProvider.favoriteBooks;
+
+    setState(() {
+      _isLoading = false;
+    });
   }
 }

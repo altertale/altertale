@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/book_model.dart';
 import '../services/payment_service.dart';
+import '../services/purchase_service.dart'; // Added import for PurchaseService
 
 /// Sahte ödeme dialog'u - Test modunda satın alma onayı
 class FakePaymentDialog extends StatefulWidget {
@@ -400,6 +401,14 @@ class _FakePaymentDialogState extends State<FakePaymentDialog> {
           'userPoints': widget.userPoints,
         },
       );
+
+      // Clear purchase cache if payment was successful
+      if (result.success) {
+        final purchaseService = PurchaseService();
+        purchaseService.addToPurchasedCache(widget.book.id);
+        await purchaseService.clearPurchaseCache();
+        print('💰 Purchase cache cleared after successful payment');
+      }
 
       // Ekran görüntüsü korumasını kaldır
       if (Theme.of(context).platform == TargetPlatform.android) {

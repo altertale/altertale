@@ -7,6 +7,7 @@ import '../../services/settings_service.dart';
 import '../../services/profile/profile_service.dart';
 import '../../models/user_profile_model.dart';
 import '../../widgets/widgets.dart';
+import '../../widgets/offline/connection_status_widget.dart';
 
 /// Settings Screen - Ayarlar Ekranı
 ///
@@ -573,6 +574,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
             secondary: const Icon(Icons.cloud_off),
           ),
+
+          // Sync Settings Section
+          const SizedBox(height: 16),
+          const TitleText('Senkronizasyon', size: TitleSize.medium),
+          const SizedBox(height: 8),
+          ConnectionStatusWidget(),
         ],
       ),
     );

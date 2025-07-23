@@ -6,14 +6,14 @@ import '../../models/book_model.dart';
 import '../../constants/app_colors.dart';
 import '../../services/favorites_service.dart';
 import '../../services/cart_service.dart';
+import '../../services/purchase_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/cart_provider.dart';
-import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 
 /// Kitap kartı widget'ı - kitap bilgilerini kart formatında gösterir
-class BookCard extends StatelessWidget {
+class BookCard extends StatefulWidget {
   final BookModel book;
   final VoidCallback? onTap;
   final VoidCallback? onBuyTap;
@@ -40,12 +40,51 @@ class BookCard extends StatelessWidget {
   });
 
   @override
+  State<BookCard> createState() => _BookCardState();
+}
+
+class _BookCardState extends State<BookCard> {
+  final CartService _cartService = CartService();
+  final PurchaseService _purchaseService = PurchaseService();
+  bool _isPurchased = false;
+  bool _isInCart = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPurchaseStatus();
+  }
+
+  Future<void> _checkPurchaseStatus() async {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isLoggedIn) return;
+
+    try {
+      final purchased = await _purchaseService.isBookPurchased(widget.book.id);
+      final inCart = await _cartService.isBookInCart(
+        widget.book.id,
+        authProvider.userId,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isPurchased = purchased;
+          _isInCart = inCart;
+        });
+      }
+    } catch (e) {
+      print('❌ Error checking purchase status: $e');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Card(
         elevation: 2,
         clipBehavior: Clip.antiAlias,
@@ -66,7 +105,7 @@ class BookCard extends StatelessWidget {
                     // Kitap adı
                     Flexible(
                       child: Text(
-                        book.title,
+                        widget.book.title,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           fontSize: 12, // Smaller font
@@ -80,7 +119,7 @@ class BookCard extends StatelessWidget {
                     // Yazar adı
                     Flexible(
                       child: Text(
-                        book.author,
+                        widget.book.author,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           fontSize: 10, // Smaller font
@@ -93,7 +132,7 @@ class BookCard extends StatelessWidget {
 
                     // Fiyat
                     Text(
-                      book.formattedPrice,
+                      widget.book.formattedPrice,
                       style: theme.textTheme.labelLarge?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.bold,
@@ -107,7 +146,7 @@ class BookCard extends StatelessWidget {
                     _buildCartButton(context),
 
                     // Yorum butonu (sadece satın alınan kitaplar için)
-                    if (isPurchased) ...[
+                    if (_isPurchased) ...[
                       const SizedBox(height: 4),
                       _buildCommentButton(context),
                     ],
@@ -130,7 +169,7 @@ class BookCard extends StatelessWidget {
         child: Stack(
           children: [
             CachedNetworkImage(
-              imageUrl: book.coverImageUrl,
+              imageUrl: widget.book.coverImageUrl,
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
@@ -183,7 +222,7 @@ class BookCard extends StatelessWidget {
           );
         });
 
-        final isFavorite = favoritesProvider.isFavorite(book.id);
+        final isFavorite = favoritesProvider.isFavorite(widget.book.id);
 
         return Container(
           decoration: BoxDecoration(
@@ -197,9 +236,10 @@ class BookCard extends StatelessWidget {
             ),
             onPressed: () async {
               try {
+                // BookModel is already the correct type, no conversion needed
                 final wasToggled = await favoritesProvider.toggleFavorite(
                   authProvider.userId,
-                  book,
+                  widget.book, // book is already BookModel type
                 );
 
                 // Show feedback
@@ -243,7 +283,7 @@ class BookCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Text(
-      book.title,
+      widget.book.title,
       style: theme.textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.bold,
         fontSize: 14,
@@ -258,7 +298,7 @@ class BookCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Text(
-      book.author,
+      widget.book.author,
       style: theme.textTheme.bodySmall?.copyWith(
         color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
         fontSize: 12,
@@ -274,17 +314,17 @@ class BookCard extends StatelessWidget {
 
     return Row(
       children: [
-        if (showRating) ...[
+        if (widget.showRating) ...[
           Icon(Icons.star, size: 14, color: Colors.amber[600]),
           const SizedBox(width: 2),
           Text(
-            book.formattedRating,
+            widget.book.formattedRating,
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
           ),
-          if (showReadCount) ...[
+          if (widget.showReadCount) ...[
             const SizedBox(width: 8),
             Container(
               width: 2,
@@ -297,7 +337,7 @@ class BookCard extends StatelessWidget {
             const SizedBox(width: 8),
           ],
         ],
-        if (showReadCount) ...[
+        if (widget.showReadCount) ...[
           Icon(
             Icons.visibility,
             size: 12,
@@ -305,7 +345,7 @@ class BookCard extends StatelessWidget {
           ),
           const SizedBox(width: 2),
           Text(
-            book.formattedReadCount,
+            widget.book.formattedReadCount,
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: 11,
               color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
@@ -320,7 +360,7 @@ class BookCard extends StatelessWidget {
   Widget _buildPrice(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (book.price == 0) {
+    if (widget.book.price == 0) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
@@ -339,7 +379,7 @@ class BookCard extends StatelessWidget {
     }
 
     return Text(
-      book.formattedPrice,
+      widget.book.formattedPrice,
       style: theme.textTheme.bodyMedium?.copyWith(
         fontWeight: FontWeight.bold,
         color: theme.colorScheme.primary,
@@ -352,11 +392,20 @@ class BookCard extends StatelessWidget {
   Widget _buildActionButton(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (isPurchased) {
+    if (widget.isPurchased) {
       return SizedBox(
         width: double.infinity,
         child: ElevatedButton(
-          onPressed: onReadTap,
+          onPressed:
+              widget.onReadTap ??
+              () {
+                // Navigate to reading screen
+                Navigator.pushNamed(
+                  context,
+                  '/reading',
+                  arguments: {'book': widget.book},
+                );
+              },
           style: ElevatedButton.styleFrom(
             backgroundColor: theme.colorScheme.primary,
             foregroundColor: theme.colorScheme.onPrimary,
@@ -376,11 +425,11 @@ class BookCard extends StatelessWidget {
       );
     }
 
-    if (book.price == 0) {
+    if (widget.book.price == 0) {
       return SizedBox(
         width: double.infinity,
         child: OutlinedButton(
-          onPressed: onReadTap,
+          onPressed: widget.onReadTap,
           style: OutlinedButton.styleFrom(
             foregroundColor: theme.colorScheme.primary,
             side: BorderSide(color: theme.colorScheme.primary),
@@ -403,7 +452,7 @@ class BookCard extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: onBuyTap,
+        onPressed: widget.onBuyTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: theme.colorScheme.primary,
           foregroundColor: theme.colorScheme.onPrimary,
@@ -442,14 +491,14 @@ class BookCard extends StatelessWidget {
     // Create rich share content
     final String shareText =
         '''
-📚 ${book.title}
-✍️ Yazar: ${book.author}
-💰 Fiyat: ${book.formattedPrice}
-⭐ Değerlendirme: ${book.averageRating.toStringAsFixed(1)}/5.0 (${book.ratingCount} değerlendirme)
-📖 ${book.pageCount} sayfa
-🏷️ Kategori: ${book.categories.isNotEmpty ? book.categories.first : 'Genel'}
+📚 ${widget.book.title}
+✍️ Yazar: ${widget.book.author}
+💰 Fiyat: ${widget.book.formattedPrice}
+⭐ Değerlendirme: ${widget.book.averageRating.toStringAsFixed(1)}/5.0 (${widget.book.ratingCount} değerlendirme)
+📖 ${widget.book.pageCount} sayfa
+🏷️ Kategori: ${widget.book.categories.isNotEmpty ? widget.book.categories.first : 'Genel'}
 
-${book.description.length > 100 ? book.description.substring(0, 100) + '...' : book.description}
+${widget.book.description.length > 100 ? widget.book.description.substring(0, 100) + '...' : widget.book.description}
 
 📱 Altertale uygulamasında bu muhteşem kitabı keşfedin!
 🔗 #Altertale #Kitap #Okuma
@@ -477,7 +526,7 @@ App Store: https://apps.apple.com/app/altertale/id123456789
               subtitle: const Text('Tüm uygulamalar'),
               onTap: () {
                 Navigator.pop(context);
-                Share.share(shareText, subject: book.title);
+                Share.share(shareText, subject: widget.book.title);
               },
             ),
 
@@ -490,16 +539,16 @@ App Store: https://apps.apple.com/app/altertale/id123456789
                 Navigator.pop(context);
                 final whatsappText =
                     '''
-📚 *${book.title}*
-✍️ ${book.author}
-⭐ ${book.averageRating.toStringAsFixed(1)}/5.0
-💰 ${book.formattedPrice}
+📚 *${widget.book.title}*
+✍️ ${widget.book.author}
+⭐ ${widget.book.averageRating.toStringAsFixed(1)}/5.0
+💰 ${widget.book.formattedPrice}
 
-${book.description.length > 80 ? book.description.substring(0, 80) + '...' : book.description}
+${widget.book.description.length > 80 ? widget.book.description.substring(0, 80) + '...' : widget.book.description}
 
 📱 Altertale uygulamasında oku!
 ''';
-                Share.share(whatsappText, subject: book.title);
+                Share.share(whatsappText, subject: widget.book.title);
               },
             ),
 
@@ -512,16 +561,16 @@ ${book.description.length > 80 ? book.description.substring(0, 80) + '...' : boo
                 Navigator.pop(context);
                 final socialText =
                     '''
-📚 ${book.title} - ${book.author}
-⭐ ${book.averageRating.toStringAsFixed(1)}/5.0
-💰 ${book.formattedPrice}
+📚 ${widget.book.title} - ${widget.book.author}
+⭐ ${widget.book.averageRating.toStringAsFixed(1)}/5.0
+💰 ${widget.book.formattedPrice}
 
-${book.description.length > 120 ? book.description.substring(0, 120) + '...' : book.description}
+${widget.book.description.length > 120 ? widget.book.description.substring(0, 120) + '...' : widget.book.description}
 
-#Altertale #Kitap #Okuma #${book.author.replaceAll(' ', '')}
+#Altertale #Kitap #Okuma #${widget.book.author.replaceAll(' ', '')}
 📱 Altertale'de keşfet!
 ''';
-                Share.share(socialText, subject: book.title);
+                Share.share(socialText, subject: widget.book.title);
               },
             ),
 
@@ -533,12 +582,12 @@ ${book.description.length > 120 ? book.description.substring(0, 120) + '...' : b
               onTap: () {
                 Navigator.pop(context);
                 final copyText =
-                    '''${book.title} - ${book.author}
-⭐ ${book.averageRating.toStringAsFixed(1)}/5.0 | 💰 ${book.formattedPrice}
+                    '''${widget.book.title} - ${widget.book.author}
+⭐ ${widget.book.averageRating.toStringAsFixed(1)}/5.0 | 💰 ${widget.book.formattedPrice}
 📱 Altertale uygulamasında oku!''';
 
                 // Copy to clipboard (would need clipboard package)
-                Share.share(copyText, subject: book.title);
+                Share.share(copyText, subject: widget.book.title);
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -554,23 +603,31 @@ ${book.description.length > 120 ? book.description.substring(0, 120) + '...' : b
     );
   }
 
-  /// Comment button widget'ı (sadece satın alınan kitaplar için)
+  /// Yorum butonu widget'ı (sadece satın alınan kitaplar için)
   Widget _buildCommentButton(BuildContext context) {
     return SizedBox(
-      height: 24,
       width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () => _openCommentModal(context),
-        icon: const Icon(Icons.comment, size: 12),
-        label: const Text('Yorum Yap', style: TextStyle(fontSize: 10)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          minimumSize: const Size(0, 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+      child: OutlinedButton(
+        onPressed: () {
+          // Navigate to comments or book detail with comments section
+          Navigator.pushNamed(
+            context,
+            '/book-detail',
+            arguments: {'bookId': widget.book.id, 'showComments': true},
+          );
+        },
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          textStyle: const TextStyle(fontSize: 10),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.comment, size: 14),
+            SizedBox(width: 4),
+            Text('Yorum Yap'),
+          ],
         ),
       ),
     );
@@ -588,166 +645,196 @@ ${book.description.length > 120 ? book.description.substring(0, 120) + '...' : b
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: _CommentModal(book: book),
+        child: _CommentModal(book: widget.book),
       ),
     );
   }
 
-  /// Cart button widget'ı
+  /// Sepete ekle butonu widget'ı
   Widget _buildCartButton(BuildContext context) {
-    return Consumer2<AuthProvider, CartProvider>(
-      builder: (context, authProvider, cartProvider, child) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
         if (!authProvider.isLoggedIn) {
           return SizedBox(
-            height: 24,
             width: double.infinity,
-            child: OutlinedButton.icon(
+            child: ElevatedButton(
               onPressed: () {
-                Navigator.pushNamed(context, '/login');
+                _showLoginPrompt(context);
               },
-              icon: const Icon(Icons.login, size: 12),
-              label: const Text('Giriş Yap', style: TextStyle(fontSize: 10)),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                minimumSize: const Size(0, 24),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(6),
                 ),
+                textStyle: const TextStyle(fontSize: 11),
+              ),
+              child: const Text('Giriş Yap'),
+            ),
+          );
+        }
+
+        // Show different button based on purchase status
+        if (_isPurchased) {
+          return SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed:
+                  widget.onReadTap ??
+                  () {
+                    // Navigate to reading screen
+                    Navigator.pushNamed(
+                      context,
+                      '/reading',
+                      arguments: {'book': widget.book},
+                    );
+                  },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                textStyle: const TextStyle(fontSize: 11),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.menu_book, size: 16),
+                  SizedBox(width: 4),
+                  Text('Oku'),
+                ],
               ),
             ),
           );
         }
 
-        // Initialize cart if needed
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          cartProvider.initializeCart(authProvider.userId);
-        });
-
-        final isInCart = cartProvider.isBookInCart(book.id);
-        final hasError =
-            cartProvider.error != null &&
-            cartProvider.error!.contains('zaten sepette');
-        final theme = Theme.of(context);
-
-        return SizedBox(
-          height: 24,
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: cartProvider.isLoading
-                ? null
-                : () => _addToCartWithProvider(
-                    context,
-                    authProvider.userId,
-                    cartProvider,
-                  ),
-            icon: Icon(
-              isInCart ? Icons.check_circle : Icons.shopping_cart,
-              size: 12,
-            ),
-            label: Text(
-              isInCart ? 'Sepete Eklendi' : 'Sepete Ekle',
-              style: const TextStyle(fontSize: 10),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: hasError
-                  ? Colors.orange
-                  : isInCart
-                  ? Colors.green
-                  : theme.colorScheme.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              minimumSize: const Size(0, 24),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        if (_isInCart) {
+          return SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pushNamed(context, '/cart');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                textStyle: const TextStyle(fontSize: 11),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shopping_cart, size: 16),
+                  SizedBox(width: 4),
+                  Text('Sepette'),
+                ],
               ),
             ),
+          );
+        }
+
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isLoading
+                ? null
+                : () => _addToCart(authProvider.userId),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+              textStyle: const TextStyle(fontSize: 11),
+            ),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_shopping_cart, size: 16),
+                      SizedBox(width: 4),
+                      Text('Sepete Ekle'),
+                    ],
+                  ),
           ),
         );
       },
     );
   }
 
-  /// Add book to cart using CartProvider
-  Future<void> _addToCartWithProvider(
-    BuildContext context,
-    String userId,
-    CartProvider cartProvider,
-  ) async {
-    final bookForCart = Book(
-      id: book.id,
-      title: book.title,
-      author: book.author,
-      description: book.description,
-      coverImageUrl: book.coverImageUrl,
-      category: book.categories.isNotEmpty ? book.categories.first : 'Genel',
-      price: book.price,
-      createdAt: book.createdAt,
-      updatedAt: book.updatedAt,
-    );
+  Future<void> _addToCart(String userId) async {
+    setState(() {
+      _isLoading = true;
+    });
 
-    final success = await cartProvider.addToCart(userId, bookForCart);
+    try {
+      // Use BookModel directly - no conversion needed
+      await _cartService.addToCart(
+        book: widget.book, // widget.book is already BookModel
+        userId: userId,
+      );
 
-    if (context.mounted) {
-      if (success) {
+      setState(() {
+        _isInCart = true;
+      });
+
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Sepete eklendi!'),
-              ],
-            ),
+            content: Text('${widget.book.title} sepete eklendi'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
-            action: SnackBarAction(
-              label: 'Sepete Git',
-              onPressed: () => Navigator.pushNamed(context, '/cart'),
-            ),
           ),
         );
-
-        // Clear error after successful add
-        Future.delayed(const Duration(seconds: 1), () {
-          cartProvider.clearError();
-        });
-      } else {
-        final isAlreadyInCart =
-            cartProvider.error?.contains('zaten sepette') ?? false;
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  isAlreadyInCart ? Icons.info : Icons.error,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isAlreadyInCart
-                        ? 'Bu kitap zaten sepette!'
-                        : 'Sepete eklenirken hata oluştu',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: isAlreadyInCart ? Colors.orange : Colors.red,
-            action: isAlreadyInCart
-                ? SnackBarAction(
-                    label: 'Sepete Git',
-                    onPressed: () => Navigator.pushNamed(context, '/cart'),
-                  )
-                : null,
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
-
-        // Clear error after showing message
-        Future.delayed(const Duration(seconds: 2), () {
-          cartProvider.clearError();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
       }
     }
+  }
+
+  void _showLoginPrompt(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Giriş Gerekli'),
+        content: const Text('Sepete eklemek için giriş yapmanız gerekiyor.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/login');
+            },
+            child: const Text('Giriş Yap'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

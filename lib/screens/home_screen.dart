@@ -2,16 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/book_provider.dart';
-import '../services/cart_service.dart';
-import '../models/cart_item.dart';
-import '../models/book_model.dart';
-import '../widgets/widgets.dart';
-import '../widgets/books/book_card.dart';
+import '../providers/favorites_provider.dart';
+import '../providers/cart_provider.dart';
 
 /// Home Screen - Ana Sayfa
-///
-/// Kullanıcının ana ekranı. Hoş geldin mesajı, hızlı işlemler,
-/// öne çıkan kitaplar ve son aktiviteler gösterilir.
+/// Basit ve functional ana sayfa
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -20,8 +15,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final CartService _cartService = CartService();
-  int _currentIndex = 0;
   bool _isInitialized = false;
 
   @override
@@ -33,12 +26,20 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initializeData() async {
     if (_isInitialized) return;
 
-    final bookProvider = context.read<BookProvider>();
-    await bookProvider.loadFeaturedBooks();
+    try {
+      final bookProvider = context.read<BookProvider>();
+      await bookProvider.loadBooks();
+      await bookProvider.loadFeaturedBooks();
 
-    setState(() {
-      _isInitialized = true;
-    });
+      setState(() {
+        _isInitialized = true;
+      });
+    } catch (e) {
+      print('Error initializing home screen: $e');
+      setState(() {
+        _isInitialized = true;
+      });
+    }
   }
 
   @override
@@ -48,225 +49,161 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      body: _buildBody(),
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Icon(Icons.auto_stories, color: colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(
+              'AlterTale',
+              style: TextStyle(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: colorScheme.surface,
+        elevation: 0,
+        actions: [
+          // Simple cart icon
+          IconButton(
+            icon: const Icon(Icons.shopping_cart_outlined),
+            onPressed: () {
+              Navigator.of(context).pushNamed('/cart');
+            },
+          ),
+          // Simple profile icon
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            onPressed: () {
+              Navigator.of(context).pushNamed('/profile');
+            },
+          ),
+        ],
+      ),
+      body: _isInitialized ? _buildBody() : _buildLoadingBody(),
       bottomNavigationBar: _buildBottomNavigation(),
     );
   }
 
+  Widget _buildLoadingBody() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Yükleniyor...'),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBody() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Welcome Section
+          _buildWelcomeSection(),
 
-    return CustomScrollView(
-      slivers: [
-        // App Bar
-        SliverAppBar(
-          floating: true,
-          backgroundColor: colorScheme.surface,
-          title: Row(
-            children: [
-              Icon(Icons.auto_stories, color: colorScheme.primary),
-              const SizedBox(width: 8),
-              TitleText(
-                'Altertale',
-                color: colorScheme.primary,
-                size: TitleSize.large,
-              ),
-            ],
-          ),
-          actions: [
-            // Cart Icon with Badge
-            Consumer<AuthProvider>(
-              builder: (context, authProvider, child) {
-                if (!authProvider.isLoggedIn) {
-                  return IconButton(
-                    icon: const Icon(Icons.shopping_cart_outlined),
-                    onPressed: () => Navigator.of(context).pushNamed('/cart'),
-                  );
-                }
+          const SizedBox(height: 24),
 
-                return StreamBuilder<int>(
-                  stream: _cartService
-                      .getCartItemsStream(authProvider.user!.uid)
-                      .map(
-                        (cartItems) => cartItems.fold<int>(
-                          0,
-                          (sum, item) => sum + item.quantity,
-                        ),
-                      ),
-                  builder: (context, snapshot) {
-                    final cartItemCount = snapshot.data ?? 0;
+          // Quick Actions
+          _buildQuickActions(),
 
-                    return Stack(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.shopping_cart_outlined),
-                          onPressed: () =>
-                              Navigator.of(context).pushNamed('/cart'),
-                        ),
-                        if (cartItemCount > 0)
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              child: Text(
-                                cartItemCount > 99
-                                    ? '99+'
-                                    : cartItemCount.toString(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
+          const SizedBox(height: 24),
 
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Bildirimler yakında...')),
-                );
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: () => Navigator.of(context).pushNamed('/settings'),
-            ),
-          ],
-        ),
+          // Featured Books
+          _buildFeaturedBooks(),
 
-        // Content
-        SliverPadding(
-          padding: const EdgeInsets.all(16),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              // Welcome Section
-              _buildWelcomeSection(),
-              const SizedBox(height: 24),
+          const SizedBox(height: 24),
 
-              // Quick Actions
-              _buildQuickActionsSection(),
-              const SizedBox(height: 24),
-
-              // Featured Books
-              _buildFeaturedBooksSection(),
-              const SizedBox(height: 24),
-
-              // Recent Activity
-              _buildRecentActivitySection(),
-            ]),
-          ),
-        ),
-      ],
+          // Recent Activity
+          _buildRecentActivity(),
+        ],
+      ),
     );
   }
 
   Widget _buildWelcomeSection() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        final displayName = authProvider.isLoggedIn
-            ? authProvider.getUserDisplayText()
-            : 'Misafir';
-
-        return RoundedCard(
-          backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.3),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.waving_hand,
-                    color: Colors.orange.shade400,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 8),
-                  TitleText('Merhaba, $displayName!', size: TitleSize.medium),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SubtitleText(
-                'Bugün hangi hikayeyi keşfetmek istiyorsun?',
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ],
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  authProvider.isLoggedIn
+                      ? 'Hoş geldiniz!'
+                      : 'AlterTale\'e hoş geldiniz!',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  authProvider.isLoggedIn
+                      ? 'Bugün hangi kitabı okumak istiyorsunuz?'
+                      : 'Binlerce kitap arasından seçim yapın.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildQuickActionsSection() {
+  Widget _buildQuickActions() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const TitleText('Hızlı İşlemler', size: TitleSize.medium),
+        Text('Hızlı İşlemler', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
-
-        // First Row - Main Actions
         Row(
           children: [
             Expanded(
               child: _buildQuickActionCard(
-                icon: Icons.auto_stories,
-                title: 'Kitaplara Gözat',
-                subtitle: 'Tüm Koleksiyon',
-                onTap: () => Navigator.of(context).pushNamed('/books'),
+                'Kitapları Keşfet',
+                Icons.explore,
+                Colors.blue,
+                () => Navigator.of(context).pushNamed('/explore'),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _buildQuickActionCard(
-                icon: Icons.shopping_cart,
-                title: 'Sepetim',
-                subtitle: 'Alışveriş',
-                onTap: () => Navigator.of(context).pushNamed('/cart'),
+                'Kütüphanem',
+                Icons.library_books,
+                Colors.green,
+                () => Navigator.of(context).pushNamed('/library'),
               ),
             ),
           ],
         ),
-
         const SizedBox(height: 12),
-
-        // Second Row - User Actions
         Row(
           children: [
             Expanded(
               child: _buildQuickActionCard(
-                icon: Icons.receipt_long,
-                title: 'Siparişlerim',
-                subtitle: 'Geçmiş',
-                onTap: () => Navigator.of(context).pushNamed('/orders'),
+                'Alışveriş Sepeti',
+                Icons.shopping_cart,
+                Colors.orange,
+                () => Navigator.of(context).pushNamed('/cart'),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _buildQuickActionCard(
-                icon: Icons.favorite,
-                title: 'Favoriler',
-                subtitle: 'Beğendikleriniz',
-                onTap: () => Navigator.of(context).pushNamed('/my-books'),
+                'Ayarlar',
+                Icons.settings,
+                Colors.purple,
+                () => Navigator.of(context).pushNamed('/settings'),
               ),
             ),
           ],
@@ -275,82 +212,108 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildQuickActionCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return RoundedCard(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, size: 32, color: colorScheme.primary),
-          const SizedBox(height: 8),
-          TitleText(title, size: TitleSize.small, textAlign: TextAlign.center),
-          SubtitleText(
-            subtitle,
-            size: SubtitleSize.small,
-            textAlign: TextAlign.center,
+  Widget _buildQuickActionCard(
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Icon(icon, size: 32, color: color),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildFeaturedBooksSection() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
+  Widget _buildFeaturedBooks() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(Icons.star, color: colorScheme.primary),
-            const SizedBox(width: 8),
-            TitleText('Öne Çıkan Kitaplar', size: TitleSize.medium),
-          ],
+        Text(
+          'Öne Çıkan Kitaplar',
+          style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Consumer<BookProvider>(
           builder: (context, bookProvider, child) {
-            final featuredBooks = bookProvider.featuredBooks;
-
             if (bookProvider.isLoading) {
-              return const SizedBox(
-                height: 200,
-                child: Center(child: CircularProgressIndicator()),
-              );
+              return const Center(child: CircularProgressIndicator());
             }
 
+            final featuredBooks = bookProvider.featuredBooks;
             if (featuredBooks.isEmpty) {
-              return const SizedBox(
-                height: 200,
-                child: Center(child: Text('Henüz öne çıkan kitap yok')),
+              return const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Henüz öne çıkan kitap bulunmamaktadır.'),
+                ),
               );
             }
 
             return SizedBox(
-              height: 280,
+              height: 200,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: featuredBooks.length,
                 itemBuilder: (context, index) {
                   final book = featuredBooks[index];
                   return Container(
-                    width: 160,
-                    margin: const EdgeInsets.only(right: 16),
-                    child: BookCard(
-                      book: book,
-                      onTap: () {
-                        Navigator.of(
-                          context,
-                        ).pushNamed('/book-detail', arguments: book.id);
-                      },
+                    width: 140,
+                    margin: const EdgeInsets.only(right: 12),
+                    child: Card(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(12),
+                                ),
+                                color: Colors.grey.shade200,
+                              ),
+                              child: const Center(
+                                child: Icon(Icons.book, size: 48),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  book.title,
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  book.author,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -362,209 +325,159 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFeaturedBookCard(int index) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final colors = [
-      Colors.blue,
-      Colors.purple,
-      Colors.green,
-      Colors.orange,
-      Colors.red,
-    ];
-    final titles = [
-      'Harika Kitap ${index + 1}',
-      'Muhteşem Roman',
-      'Büyülü Hikaye',
-      'Epik Macera',
-      'Sırlar Kitabı',
-    ];
-
-    return RoundedCard(
-      onTap: () => Navigator.of(context).pushNamed('/book/${index + 1}'),
-      child: SizedBox(
-        width: 140,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              height: 120,
-              decoration: BoxDecoration(
-                color: colors[index].withValues(alpha: 0.2),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
-                ),
-              ),
-              child: Icon(Icons.menu_book, size: 48, color: colors[index]),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TitleText(
-                      titles[index],
-                      size: TitleSize.small,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    SubtitleText(
-                      'Yazar ${index + 1}',
-                      size: SubtitleSize.small,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecentActivitySection() {
+  Widget _buildRecentActivity() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const TitleText('Son Aktiviteler', size: TitleSize.medium),
+        Text('Son Aktiviteler', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
-        ...List.generate(
-          3,
-          (index) => Padding(
-            padding: EdgeInsets.only(bottom: index == 2 ? 0 : 12),
-            child: _buildActivityItem(index),
+        Card(
+          child: ListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              ListTile(
+                leading: const Icon(Icons.book_outlined),
+                title: const Text('Demo modunda çalışıyorsunuz'),
+                subtitle: const Text(
+                  'Giriş yaparak tüm özellikleri kullanabilirsiniz',
+                ),
+                trailing: const Icon(Icons.info_outline),
+              ),
+              ListTile(
+                leading: const Icon(Icons.library_books),
+                title: const Text('10 kitap yüklendi'),
+                subtitle: const Text('BookModel entegrasyonu aktif'),
+                trailing: const Icon(Icons.check_circle, color: Colors.green),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildActivityItem(int index) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final activities = [
-      'Bugün 3 sayfa okudunuz',
-      'Yeni bir kitap favorilerinize eklendi',
-      'Haftalık okuma hedefinizin %60\'ını tamamladınız',
-    ];
-    final icons = [Icons.menu_book, Icons.favorite, Icons.emoji_events];
+  Widget _buildBottomNavigation() {
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      currentIndex: 0,
+      onTap: (index) {
+        switch (index) {
+          case 0:
+            // Home - already here
+            break;
+          case 1:
+            Navigator.of(context).pushNamed('/explore');
+            break;
+          case 2:
+            Navigator.of(context).pushNamed('/library');
+            break;
+          case 3:
+            Navigator.of(context).pushNamed('/cart');
+            break;
+          case 4:
+            Navigator.of(context).pushNamed('/profile');
+            break;
+        }
+      },
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_outlined),
+          activeIcon: Icon(Icons.home),
+          label: 'Ana Sayfa',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.explore_outlined),
+          activeIcon: Icon(Icons.explore),
+          label: 'Keşfet',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.library_books_outlined),
+          activeIcon: Icon(Icons.library_books),
+          label: 'Kütüphane',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.shopping_cart_outlined),
+          activeIcon: Icon(Icons.shopping_cart),
+          label: 'Sepet',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_outlined),
+          activeIcon: Icon(Icons.person),
+          label: 'Profil',
+        ),
+      ],
+    );
+  }
 
-    return RoundedCard(
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icons[index], color: colorScheme.primary),
+  void _showFavorites() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Favorilerim'),
+        content: Consumer<FavoritesProvider>(
+          builder: (context, favProvider, child) {
+            if (favProvider.favorites.isEmpty) {
+              return const Text('Henüz favori kitabınız bulunmamaktadır.');
+            }
+            return SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: favProvider.favorites.length,
+                itemBuilder: (context, index) {
+                  final book = favProvider.favorites[index];
+                  return ListTile(
+                    leading: const Icon(Icons.book),
+                    title: Text(book.title),
+                    subtitle: Text(book.author),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Kapat'),
           ),
-          const SizedBox(width: 12),
-          Expanded(child: SubtitleText(activities[index])),
         ],
       ),
     );
   }
 
-  Widget _buildBottomNavigation() {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
-        return BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-
-            switch (index) {
-              case 0:
-                // Home - already here
-                break;
-              case 1:
-                Navigator.of(context).pushNamed('/explore');
-                break;
-              case 2:
-                Navigator.of(context).pushNamed('/my-books');
-                break;
-              case 3:
-                Navigator.of(context).pushNamed('/library');
-                break;
-              case 4:
-                Navigator.of(context).pushNamed('/cart');
-                break;
-              case 5:
-                Navigator.of(context).pushNamed('/profile');
-                break;
-            }
-          },
-          items: [
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Ana Sayfa',
+  void _showUserMenu(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Kullanıcı Menüsü'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text('Demo Kullanıcısı'),
+              subtitle: const Text('Misafir olarak görüntülüyorsunuz'),
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.search_outlined),
-              activeIcon: Icon(Icons.search),
-              label: 'Keşfet',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.book_outlined),
-              activeIcon: Icon(Icons.book),
-              label: 'Kitaplarım',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.library_books_outlined),
-              activeIcon: Icon(Icons.library_books),
-              label: 'Kütüphane',
-            ),
-            BottomNavigationBarItem(
-              icon: StreamBuilder<List<CartItem>>(
-                stream: authProvider.isLoggedIn
-                    ? _cartService.getCartItemsStream(authProvider.user!.uid)
-                    : const Stream.empty(),
-                builder: (context, snapshot) {
-                  final cartItems = snapshot.data ?? [];
-                  if (cartItems.isEmpty) {
-                    return const Icon(Icons.shopping_cart_outlined);
-                  }
-                  return Badge(
-                    label: Text('${cartItems.length}'),
-                    child: const Icon(Icons.shopping_cart_outlined),
-                  );
-                },
-              ),
-              activeIcon: const Icon(Icons.shopping_cart),
-              label: 'Sepet',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.person_outlined),
-              activeIcon: Icon(Icons.person),
-              label: 'Profil',
+            Consumer<CartProvider>(
+              builder: (context, cartProvider, child) {
+                return ListTile(
+                  leading: const Icon(Icons.shopping_cart),
+                  title: const Text('Sepetim'),
+                  subtitle: Text('${cartProvider.itemCount} ürün'),
+                );
+              },
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Kapat'),
+          ),
+        ],
+      ),
     );
   }
-}
-
-/// Bottom Navigation Item Model
-class BottomNavItem {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-
-  BottomNavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-  });
 }

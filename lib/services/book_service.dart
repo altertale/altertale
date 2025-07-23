@@ -1,235 +1,216 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import '../models/book.dart';
+import '../models/book_model.dart';
 
 /// Book Service for Firestore Operations
 ///
-/// Handles all book-related database operations including:
-/// - Real-time book listing
-/// - Book detail retrieval
-/// - CRUD operations for future modules
+/// Handles all book-related database operations with BookModel
 class BookService {
-  static final BookService _instance = BookService._internal();
-  factory BookService() => _instance;
-  BookService._internal();
-
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static const String _booksCollection = 'books';
+  final String booksCollection = 'books';
 
-  // ==================== REAL-TIME DATA STREAMS ====================
+  // Demo mode for testing - Always true to support all users
+  bool get isDemoMode => true;
 
-  /// Get real-time stream of all books
-  Stream<List<Book>> getBooksStream() {
-    try {
+  // In-memory storage for demo books - using BookModel
+  static final List<BookModel> _demoBooks = [];
+
+  /// Get books stream (real-time updates)
+  Stream<List<BookModel>> getBooksStream() {
+    if (isDemoMode) {
       if (kDebugMode) {
-        print('📚 BookService: Starting books stream');
+        print('📚 BookService: Using demo mode - getBooksStream');
       }
+      // Initialize demo books if empty
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
+      }
+      // Return a stream that emits demo books
+      return Stream.value(_demoBooks);
+    }
 
+    try {
       return _firestore
-          .collection(_booksCollection)
+          .collection(booksCollection)
+          .where('isPublished', isEqualTo: true)
           .orderBy('createdAt', descending: true)
           .snapshots()
-          .map((snapshot) {
-            final books = snapshot.docs
-                .map((doc) => Book.fromFirestore(doc))
-                .toList();
-
-            if (kDebugMode) {
-              print(
-                '📚 BookService: Loaded ${books.length} books from Firestore',
-              );
-            }
-
-            return books;
-          });
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => BookModel.fromFirestore(doc))
+                .toList(),
+          );
     } catch (e) {
       if (kDebugMode) {
         print('❌ BookService: Error in getBooksStream: $e');
       }
-      throw 'Kitaplar yüklenirken hata oluştu: $e';
+      return Stream.value(<BookModel>[]);
     }
   }
 
-  /// Get real-time stream of books by category
-  Stream<List<Book>> getBooksByCategoryStream(String category) {
-    try {
+  /// Get books by category stream
+  Stream<List<BookModel>> getBooksByCategoryStream(String category) {
+    if (isDemoMode) {
       if (kDebugMode) {
-        print('📚 BookService: Starting books stream for category: $category');
+        print(
+          '📚 BookService: Using demo mode - getBooksByCategoryStream($category)',
+        );
       }
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
+      }
+      final filteredBooks = _demoBooks
+          .where(
+            (book) => book.categories.any(
+              (cat) => cat.toLowerCase() == category.toLowerCase(),
+            ),
+          )
+          .toList();
+      return Stream.value(filteredBooks);
+    }
 
+    try {
       return _firestore
-          .collection(_booksCollection)
-          .where('category', isEqualTo: category)
+          .collection(booksCollection)
+          .where('isPublished', isEqualTo: true)
+          .where('categories', arrayContains: category)
           .orderBy('createdAt', descending: true)
           .snapshots()
-          .map((snapshot) {
-            final books = snapshot.docs
-                .map((doc) => Book.fromFirestore(doc))
-                .toList();
-
-            if (kDebugMode) {
-              print(
-                '📚 BookService: Loaded ${books.length} books for category $category',
-              );
-            }
-
-            return books;
-          });
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => BookModel.fromFirestore(doc))
+                .toList(),
+          );
     } catch (e) {
       if (kDebugMode) {
         print('❌ BookService: Error in getBooksByCategoryStream: $e');
       }
-      throw 'Kategori kitapları yüklenirken hata oluştu: $e';
+      return Stream.value(<BookModel>[]);
     }
   }
 
-  // ==================== SINGLE BOOK OPERATIONS ====================
-
-  /// Get a single book by ID
-  Future<Book?> getBookById(String bookId) async {
-    try {
+  /// Get single book by ID
+  Future<BookModel?> getBookById(String bookId) async {
+    if (isDemoMode) {
       if (kDebugMode) {
-        print('📖 BookService: Getting book with ID: $bookId');
+        print('📚 BookService: Using demo mode - getBookById($bookId)');
       }
-
-      if (isDemoMode) {
-        _initializeDemoBooks();
-
-        // Find book in demo data
-        try {
-          final book = _demoBooks.firstWhere((b) => b.id == bookId);
-          if (kDebugMode) {
-            print('✅ BookService: Demo book found: ${book.title}');
-          }
-          return book;
-        } catch (e) {
-          if (kDebugMode) {
-            print('⚠️ BookService: Demo book not found: $bookId');
-          }
-          return null;
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
+      }
+      try {
+        final book = _demoBooks.firstWhere((b) => b.id == bookId);
+        return book;
+      } catch (e) {
+        if (kDebugMode) {
+          print('❌ BookService: Book not found in demo: $bookId');
         }
+        return null;
       }
+    }
 
+    try {
       final doc = await _firestore
-          .collection(_booksCollection)
+          .collection(booksCollection)
           .doc(bookId)
           .get();
-
       if (!doc.exists) {
         if (kDebugMode) {
-          print('⚠️ BookService: Book not found: $bookId');
+          print('❌ BookService: Book not found: $bookId');
         }
         return null;
       }
 
-      final book = Book.fromFirestore(doc);
-
+      final book = BookModel.fromFirestore(doc);
       if (kDebugMode) {
-        print('✅ BookService: Book loaded: ${book.title}');
+        print('✅ BookService: Book found: ${book.title}');
       }
-
       return book;
     } catch (e) {
       if (kDebugMode) {
-        print('❌ BookService: Error getting book $bookId: $e');
+        print('❌ BookService: Error getting book: $e');
       }
-      throw 'Kitap detayları yüklenirken hata oluştu: $e';
+      return null;
     }
   }
 
-  /// Get real-time stream for a single book
-  Stream<Book?> getBookStreamById(String bookId) {
-    try {
+  /// Get book stream by ID (real-time updates)
+  Stream<BookModel?> getBookStreamById(String bookId) {
+    if (isDemoMode) {
       if (kDebugMode) {
-        print('📖 BookService: Starting book stream for ID: $bookId');
+        print('📚 BookService: Using demo mode - getBookStreamById($bookId)');
       }
-
-      if (isDemoMode) {
-        _initializeDemoBooks();
-
-        // Find book in demo data
-        final book = _demoBooks.firstWhere(
-          (b) => b.id == bookId,
-          orElse: () => throw StateError('Book not found'),
-        );
-
-        if (kDebugMode) {
-          print('📖 BookService: Demo book found in stream: ${book.title}');
-        }
-
-        // Return a stream with the demo book
-        return Stream.value(book);
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
       }
+      final book = _demoBooks.firstWhereOrNull((b) => b.id == bookId);
+      return Stream.value(book);
+    }
 
-      return _firestore
-          .collection(_booksCollection)
-          .doc(bookId)
-          .snapshots()
-          .map((doc) {
-            if (!doc.exists) {
-              if (kDebugMode) {
-                print('⚠️ BookService: Book not found in stream: $bookId');
-              }
-              return null;
-            }
-
-            final book = Book.fromFirestore(doc);
-
+    try {
+      return _firestore.collection(booksCollection).doc(bookId).snapshots().map(
+        (doc) {
+          if (!doc.exists) {
+            return null;
+          }
+          try {
+            final book = BookModel.fromFirestore(doc);
             if (kDebugMode) {
-              print('📖 BookService: Book updated in stream: ${book.title}');
+              print('✅ BookService: Book stream updated: ${book.title}');
             }
-
             return book;
-          });
+          } catch (e) {
+            if (kDebugMode) {
+              print('❌ BookService: Error parsing book stream: $e');
+            }
+            return null;
+          }
+        },
+      );
     } catch (e) {
       if (kDebugMode) {
-        print('❌ BookService: Error in book stream $bookId: $e');
+        print('❌ BookService: Error in getBookStreamById: $e');
       }
-
-      if (isDemoMode) {
-        // Return null stream for demo mode if book not found
-        if (kDebugMode) {
-          print('⚠️ BookService: Demo book not found: $bookId');
-        }
-        return Stream.value(null);
-      }
-
-      throw 'Kitap güncellemeleri alınırken hata oluştu: $e';
+      return Stream.value(null);
     }
   }
 
-  // ==================== PAGINATION SUPPORT ====================
-
-  /// Get books with optional filtering and pagination
-  Future<List<Book>> getBooks({
+  /// Get books with pagination and filtering
+  Future<List<BookModel>> getBooks({
     int page = 1,
-    int limit = 20,
+    int limit = 10,
     String? category,
-    String? searchQuery,
+    String? search,
+    String orderBy = 'createdAt',
+    bool descending = true,
   }) async {
-    if (kDebugMode) {
-      print(
-        '📚 BookService: Getting books - page: $page, limit: $limit, category: $category, search: $searchQuery',
-      );
-    }
-
     if (isDemoMode) {
-      _initializeDemoBooks();
+      if (kDebugMode) {
+        print(
+          '📚 BookService: Getting books - page: $page, limit: $limit, category: $category, search: $search',
+        );
+      }
 
-      List<Book> books = List.from(_demoBooks);
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
+      }
+
+      List<BookModel> books = List.from(_demoBooks);
 
       // Apply category filter
       if (category != null && category.isNotEmpty) {
         books = books
             .where(
-              (book) => book.category.toLowerCase() == category.toLowerCase(),
+              (book) => book.categories.any(
+                (cat) => cat.toLowerCase() == category.toLowerCase(),
+              ),
             )
             .toList();
       }
 
       // Apply search filter
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        final query = searchQuery.toLowerCase();
+      if (search != null && search.isNotEmpty) {
+        final query = search.toLowerCase();
         books = books
             .where(
               (book) =>
@@ -245,7 +226,7 @@ class BookService {
       final endIndex = startIndex + limit;
 
       if (startIndex >= books.length) {
-        return [];
+        return <BookModel>[];
       }
 
       final paginatedBooks = books.sublist(
@@ -261,348 +242,295 @@ class BookService {
     }
 
     try {
-      Query query = _firestore.collection(_booksCollection);
+      Query query = _firestore
+          .collection(booksCollection)
+          .where('isPublished', isEqualTo: true);
 
       // Apply category filter
       if (category != null && category.isNotEmpty) {
-        query = query.where('category', isEqualTo: category);
+        query = query.where('categories', arrayContains: category);
       }
 
-      // Apply search filter
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        // Simple search implementation - can be improved with Algolia or similar
-        query = query
-            .where('title', isGreaterThanOrEqualTo: searchQuery)
-            .where('title', isLessThanOrEqualTo: '$searchQuery\uf8ff');
-      }
+      // Apply ordering
+      query = query.orderBy(orderBy, descending: descending);
 
       // Apply pagination
       query = query.limit(limit);
       if (page > 1) {
-        // Note: Firestore offset is not recommended for large datasets
-        // Consider using cursor-based pagination for production
+        // Note: For real pagination, you'd need to use startAfter with DocumentSnapshot
+        // This is a simplified version for demo purposes
         final skipCount = (page - 1) * limit;
-        // Firestore doesn't have direct offset, so we'll implement a simple version
         query = query.limit(limit + skipCount);
       }
 
       final querySnapshot = await query.get();
-      List<Book> books = querySnapshot.docs
-          .map((doc) => Book.fromFirestore(doc))
+      List<BookModel> books = querySnapshot.docs
+          .map((doc) => BookModel.fromFirestore(doc))
           .toList();
 
-      // If we used limit + skipCount, remove the first skipCount items
-      if (page > 1) {
-        final skipCount = (page - 1) * limit;
-        books = books.skip(skipCount).toList();
+      // Apply search filter (client-side for now)
+      if (search != null && search.isNotEmpty) {
+        final searchLower = search.toLowerCase();
+        books = books
+            .where(
+              (book) =>
+                  book.title.toLowerCase().contains(searchLower) ||
+                  book.author.toLowerCase().contains(searchLower) ||
+                  book.description.toLowerCase().contains(searchLower),
+            )
+            .toList();
       }
 
       if (kDebugMode) {
-        print('📚 BookService: Loaded ${books.length} books');
+        print('✅ BookService: Loaded ${books.length} books from Firestore');
       }
 
       return books;
     } catch (e) {
       if (kDebugMode) {
-        print('❌ BookService: Error getting books: $e');
+        print('❌ BookService: Error loading books: $e');
       }
-      rethrow;
+      throw 'Kitaplar yüklenirken hata oluştu: $e';
     }
   }
 
   /// Get featured books
-  Future<List<Book>> getFeaturedBooks({int limit = 10}) async {
-    if (kDebugMode) {
-      print('📚 BookService: Getting featured books');
-    }
-
+  Future<List<BookModel>> getFeaturedBooks({int limit = 10}) async {
     if (isDemoMode) {
-      _initializeDemoBooks();
-
-      // Return first few books as featured
-      final featuredBooks = _demoBooks.take(limit).toList();
-
       if (kDebugMode) {
-        print(
-          '📚 BookService: Loaded ${featuredBooks.length} demo featured books',
-        );
+        print('📚 BookService: Getting featured books (demo mode)');
       }
-
-      return featuredBooks;
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
+      }
+      final featuredBooks = _demoBooks
+          .where((book) => book.isFeatured)
+          .toList();
+      return featuredBooks.take(limit).toList();
     }
 
     try {
       final querySnapshot = await _firestore
-          .collection(_booksCollection)
+          .collection(booksCollection)
+          .where('isPublished', isEqualTo: true)
           .where('isFeatured', isEqualTo: true)
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
 
-      final books = querySnapshot.docs
-          .map((doc) => Book.fromFirestore(doc))
+      return querySnapshot.docs
+          .map((doc) => BookModel.fromFirestore(doc))
           .toList();
-
-      if (kDebugMode) {
-        print('📚 BookService: Loaded ${books.length} featured books');
-      }
-
-      return books;
     } catch (e) {
       if (kDebugMode) {
-        print('❌ BookService: Error getting featured books: $e');
+        print('❌ BookService: Error loading featured books: $e');
       }
-      rethrow;
+      throw 'Öne çıkan kitaplar yüklenirken hata oluştu: $e';
     }
   }
 
   /// Get popular books
-  Future<List<Book>> getPopularBooks() async {
-    try {
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .orderBy('readCount', descending: true)
-          .limit(10)
-          .get();
-
-      return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in getPopularBooks: $e');
+  Future<List<BookModel>> getPopularBooks() async {
+    if (isDemoMode) {
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
       }
-      return [];
+      final popularBooks = _demoBooks.where((book) => book.isPopular).toList();
+      return popularBooks;
     }
+
+    final snapshot = await _firestore
+        .collection(booksCollection)
+        .where('isPublished', isEqualTo: true)
+        .orderBy('readCount', descending: true)
+        .limit(20)
+        .get();
+    return snapshot.docs.map((doc) => BookModel.fromFirestore(doc)).toList();
   }
 
   /// Get new books
-  Future<List<Book>> getNewBooks() async {
-    try {
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .orderBy('createdAt', descending: true)
-          .limit(10)
-          .get();
-
-      return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in getNewBooks: $e');
+  Future<List<BookModel>> getNewBooks() async {
+    if (isDemoMode) {
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
       }
-      return [];
+      final sortedBooks = List<BookModel>.from(_demoBooks);
+      sortedBooks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return sortedBooks.take(10).toList();
     }
-  }
 
-  /// Get all categories
-  Future<List<String>> getAllCategories() async {
-    try {
-      final snapshot = await _firestore.collection(_booksCollection).get();
-      final categories = snapshot.docs
-          .map((doc) => doc.data()['category'] as String?)
-          .where((category) => category != null)
-          .cast<String>()
-          .toSet()
-          .toList();
-
-      return categories;
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in getAllCategories: $e');
-      }
-      return ['Roman', 'Bilim', 'Tarih', 'Felsefe']; // Default categories
-    }
-  }
-
-  /// Get all authors
-  Future<List<String>> getAllAuthors() async {
-    try {
-      final snapshot = await _firestore.collection(_booksCollection).get();
-      final authors = snapshot.docs
-          .map((doc) => doc.data()['author'] as String?)
-          .where((author) => author != null)
-          .cast<String>()
-          .toSet()
-          .toList();
-
-      return authors;
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in getAllAuthors: $e');
-      }
-      return ['Orhan Pamuk', 'Sabahattin Ali']; // Default authors
-    }
+    final snapshot = await _firestore
+        .collection(booksCollection)
+        .where('isPublished', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .get();
+    return snapshot.docs.map((doc) => BookModel.fromFirestore(doc)).toList();
   }
 
   /// Search books
-  Future<List<Book>> searchBooks(String query) async {
-    try {
-      if (query.isEmpty) return [];
-
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .where('title', isGreaterThanOrEqualTo: query)
-          .where('title', isLessThanOrEqualTo: '$query\uf8ff')
-          .limit(20)
-          .get();
-
-      return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in searchBooks: $e');
+  Future<List<BookModel>> searchBooks(String query) async {
+    if (isDemoMode) {
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
       }
-      return [];
+      final searchQuery = query.toLowerCase();
+      return _demoBooks
+          .where(
+            (book) =>
+                book.title.toLowerCase().contains(searchQuery) ||
+                book.author.toLowerCase().contains(searchQuery) ||
+                book.description.toLowerCase().contains(searchQuery) ||
+                book.categories.any(
+                  (cat) => cat.toLowerCase().contains(searchQuery),
+                ),
+          )
+          .toList();
     }
+
+    final snapshot = await _firestore
+        .collection(booksCollection)
+        .where('isPublished', isEqualTo: true)
+        .get();
+    return snapshot.docs.map((doc) => BookModel.fromFirestore(doc)).toList();
   }
 
   /// Get similar books
-  Future<List<Book>> getSimilarBooks(String bookId) async {
+  Future<List<BookModel>> getSimilarBooks(String bookId) async {
     try {
-      // Get the book first to find its category
-      final bookDoc = await _firestore
-          .collection(_booksCollection)
-          .doc(bookId)
-          .get();
-      if (!bookDoc.exists) return [];
+      if (isDemoMode) {
+        if (_demoBooks.isEmpty) {
+          _demoBooks.addAll(_createDemoBooks());
+        }
+        final currentBook = _demoBooks.firstWhereOrNull((b) => b.id == bookId);
+        if (currentBook == null) return [];
 
-      final bookData = bookDoc.data()!;
-      final category = bookData['category'] as String?;
+        // Find books with similar categories
+        return _demoBooks
+            .where(
+              (book) =>
+                  book.id != bookId &&
+                  book.categories.any(
+                    (cat) => currentBook.categories.contains(cat),
+                  ),
+            )
+            .take(5)
+            .toList();
+      }
 
-      if (category == null) return [];
+      final currentBook = await getBookById(bookId);
+      if (currentBook == null) return [];
 
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .where('category', isEqualTo: category)
+      final querySnapshot = await _firestore
+          .collection(booksCollection)
+          .where('isPublished', isEqualTo: true)
+          .where('categories', arrayContainsAny: currentBook.categories)
           .limit(10)
           .get();
 
-      return snapshot.docs
-          .where((doc) => doc.id != bookId) // Exclude the current book
-          .map((doc) => Book.fromFirestore(doc))
+      return querySnapshot.docs
+          .map((doc) => BookModel.fromFirestore(doc))
+          .where((book) => book.id != bookId)
           .toList();
     } catch (e) {
       if (kDebugMode) {
-        print('❌ BookService: Error in getSimilarBooks: $e');
+        print('❌ BookService: Error getting similar books: $e');
       }
       return [];
     }
   }
 
   /// Get books by author
-  Future<List<Book>> getBooksByAuthor(String author) async {
-    try {
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .where('author', isEqualTo: author)
-          .get();
-
-      return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in getBooksByAuthor: $e');
+  Future<List<BookModel>> getBooksByAuthor(String author) async {
+    if (isDemoMode) {
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
       }
-      return [];
+      return _demoBooks
+          .where((book) => book.author.toLowerCase() == author.toLowerCase())
+          .toList();
     }
+
+    final snapshot = await _firestore
+        .collection(booksCollection)
+        .where('isPublished', isEqualTo: true)
+        .where('author', isEqualTo: author)
+        .get();
+    return snapshot.docs.map((doc) => BookModel.fromFirestore(doc)).toList();
   }
 
   /// Get books by category
-  Future<List<Book>> getBooksByCategory(String category) async {
-    try {
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .where('category', isEqualTo: category)
-          .get();
-
-      return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in getBooksByCategory: $e');
+  Future<List<BookModel>> getBooksByCategory(String category) async {
+    if (isDemoMode) {
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
       }
-      return [];
+      return _demoBooks
+          .where(
+            (book) => book.categories.any(
+              (cat) => cat.toLowerCase() == category.toLowerCase(),
+            ),
+          )
+          .toList();
     }
-  }
 
-  /// Increment read count
-  Future<void> incrementReadCount(String bookId) async {
-    try {
-      await _firestore.collection(_booksCollection).doc(bookId).update({
-        'readCount': FieldValue.increment(1),
-      });
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in incrementReadCount: $e');
-      }
-    }
-  }
-
-  /// Update book rating
-  Future<void> updateBookRating(String bookId, double newRating) async {
-    try {
-      await _firestore.collection(_booksCollection).doc(bookId).update({
-        'rating': newRating,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in updateBookRating: $e');
-      }
-    }
+    final snapshot = await _firestore
+        .collection(booksCollection)
+        .where('isPublished', isEqualTo: true)
+        .where('categories', arrayContains: category)
+        .get();
+    return snapshot.docs.map((doc) => BookModel.fromFirestore(doc)).toList();
   }
 
   /// Get free books
-  Future<List<Book>> getFreeBooks() async {
-    try {
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .where('price', isEqualTo: 0)
-          .limit(20)
-          .get();
-
-      return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in getFreeBooks: $e');
+  Future<List<BookModel>> getFreeBooks() async {
+    if (isDemoMode) {
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
       }
-      return [];
+      return _demoBooks.where((book) => book.price == 0.0).toList();
     }
+
+    final snapshot = await _firestore
+        .collection(booksCollection)
+        .where('isPublished', isEqualTo: true)
+        .where('price', isEqualTo: 0.0)
+        .get();
+    return snapshot.docs.map((doc) => BookModel.fromFirestore(doc)).toList();
   }
 
   /// Get books by price range
-  Future<List<Book>> getBooksByPriceRange(
+  Future<List<BookModel>> getBooksByPriceRange(
     double minPrice,
     double maxPrice,
   ) async {
-    try {
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .where('price', isGreaterThanOrEqualTo: minPrice)
-          .where('price', isLessThanOrEqualTo: maxPrice)
-          .get();
-
-      return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error in getBooksByPriceRange: $e');
+    if (isDemoMode) {
+      if (_demoBooks.isEmpty) {
+        _demoBooks.addAll(_createDemoBooks());
       }
-      return [];
+      return _demoBooks
+          .where((book) => book.price >= minPrice && book.price <= maxPrice)
+          .toList();
     }
+
+    final snapshot = await _firestore
+        .collection(booksCollection)
+        .where('isPublished', isEqualTo: true)
+        .where('price', isGreaterThanOrEqualTo: minPrice)
+        .where('price', isLessThanOrEqualTo: maxPrice)
+        .get();
+    return snapshot.docs.map((doc) => BookModel.fromFirestore(doc)).toList();
   }
 
-  // ==================== CRUD OPERATIONS (Future Use) ====================
-
-  /// Add a new book (Admin function)
-  Future<String> addBook(Book book) async {
+  /// Add book (admin)
+  Future<String> addBook(BookModel book) async {
     try {
-      if (kDebugMode) {
-        print('➕ BookService: Adding new book: ${book.title}');
-      }
-
       final docRef = await _firestore
-          .collection(_booksCollection)
+          .collection(booksCollection)
           .add(book.toMap());
-
       if (kDebugMode) {
-        print('✅ BookService: Book added with ID: ${docRef.id}');
+        print('✅ BookService: Book added: ${book.title}');
       }
-
       return docRef.id;
     } catch (e) {
       if (kDebugMode) {
@@ -612,20 +540,15 @@ class BookService {
     }
   }
 
-  /// Update an existing book (Admin function)
-  Future<void> updateBook(String bookId, Book book) async {
+  /// Update book (admin)
+  Future<void> updateBook(String bookId, BookModel book) async {
     try {
-      if (kDebugMode) {
-        print('📝 BookService: Updating book: $bookId');
-      }
-
       await _firestore
-          .collection(_booksCollection)
+          .collection(booksCollection)
           .doc(bookId)
           .update(book.toMap());
-
       if (kDebugMode) {
-        print('✅ BookService: Book updated: $bookId');
+        print('✅ BookService: Book updated: ${book.title}');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -635,436 +558,306 @@ class BookService {
     }
   }
 
-  /// Delete a book (Admin function)
-  Future<void> deleteBook(String bookId) async {
-    try {
-      if (kDebugMode) {
-        print('🗑️ BookService: Deleting book: $bookId');
-      }
+  /// Demo kitapları oluştur (test için)
+  List<BookModel> _createDemoBooks() {
+    return [
+      BookModel(
+        id: 'ATB001', // Unique AlterTale Book ID
+        title: 'Dijital Çağın Hikayesi',
+        author: 'Ayşe Yazıcı',
+        description:
+            'Teknolojinin hayatımızı nasıl değiştirdiğini anlatan çarpıcı bir roman. Modern insanın dijital dünyayla olan ilişkisini derinlemesine inceleyen bu eser, okuyucuları düşündürürken eğlendiriyor.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=1',
+        categories: ['Roman', 'Teknoloji'],
+        tags: ['dijital', 'modern', 'teknoloji'],
+        price: 29.99,
+        points: 150,
+        averageRating: 4.5,
+        ratingCount: 128,
+        readCount: 1250,
+        pageCount: 320,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 30)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: true,
+        isPopular: true,
+        previewStart: 1,
+        previewEnd: 15,
+        pointPrice: 299,
+        content: _getDemoBookContent('Dijital Çağın Hikayesi'),
+      ),
+      BookModel(
+        id: 'ATB002',
+        title: 'Yıldızlar Arası Yolculuk',
+        author: 'Mehmet Bilimci',
+        description:
+            'Uzayın derinliklerinde geçen bu bilim kurgu romanı, insanlığın gelecekteki maceralarını anlatıyor. Keşif, dostluk ve cesaret temasıyla dolu bu eser, hayal gücünüzü sınırsızca genişletecek.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=2',
+        categories: ['Bilim Kurgu', 'Macera'],
+        tags: ['uzay', 'bilim kurgu', 'macera'],
+        price: 34.99,
+        points: 200,
+        averageRating: 4.8,
+        ratingCount: 89,
+        readCount: 890,
+        pageCount: 280,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 25)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: true,
+        isPopular: false,
+        previewStart: 1,
+        previewEnd: 12,
+        pointPrice: 349,
+        content: _getDemoBookContent('Yıldızlar Arası Yolculuk'),
+      ),
+      BookModel(
+        id: 'ATB003',
+        title: 'Aşkın Matematiği',
+        author: 'Zeynep Kalp',
+        description:
+            'Matematik öğretmeni olan Ana ile mimar Kerem\'in hikayesi. İki farklı dünyadan gelen bu karakterlerin aşk hikayesi, hem duygusal hem de entelektüel bir okuma deneyimi sunuyor.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=3',
+        categories: ['Romantik', 'Drama'],
+        tags: ['aşk', 'matematik', 'drama'],
+        price: 24.99,
+        points: 120,
+        averageRating: 4.2,
+        ratingCount: 156,
+        readCount: 2100,
+        pageCount: 240,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 20)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: false,
+        isPopular: true,
+        previewStart: 1,
+        previewEnd: 10,
+        pointPrice: 249,
+        content: _getDemoBookContent('Aşkın Matematiği'),
+      ),
+      BookModel(
+        id: 'ATB004',
+        title: 'Kayıp Hazine',
+        author: 'Serkan Macera',
+        description:
+            'Tarihçi Dr. Elif\'in Anadolu\'da kayıp hazineyi bulma macerası. Antik dönemlerden kalma ipuçlarını takip eden bu heyecan verici hikaye, tarihi gerçeklerle kurguyu ustaca harmanlıyor.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=4',
+        categories: ['Macera', 'Tarih'],
+        tags: ['hazine', 'tarih', 'macera'],
+        price: 27.99,
+        points: 140,
+        averageRating: 4.6,
+        ratingCount: 203,
+        readCount: 1800,
+        pageCount: 300,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 15)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: false,
+        isPopular: true,
+        previewStart: 1,
+        previewEnd: 18,
+        pointPrice: 279,
+        content: _getDemoBookContent('Kayıp Hazine'),
+      ),
+      BookModel(
+        id: 'ATB005',
+        title: 'Ücretsiz Hikayeler',
+        author: 'Topluluk Yazarları',
+        description:
+            'Farklı yazarlardan toplanan kısa hikayeler koleksiyonu. Her türden okuyucuya hitap eden bu ücretsiz kitap, yeni yazarları keşfetmenin harika bir yolu.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=5',
+        categories: ['Hikaye', 'Koleksiyon'],
+        tags: ['ücretsiz', 'kısa hikaye', 'koleksiyon'],
+        price: 0.0, // Free book
+        points: 0,
+        averageRating: 4.0,
+        ratingCount: 45,
+        readCount: 3200,
+        pageCount: 150,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 10)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: false,
+        isPopular: false,
+        previewStart: 1,
+        previewEnd: 25,
+        pointPrice: 0,
+        content: _getDemoBookContent('Ücretsiz Hikayeler'),
+      ),
+      BookModel(
+        id: 'ATB006',
+        title: 'Yaşamın Sırları',
+        author: 'Dr. Bilge Yaşam',
+        description:
+            'Yaşam koçu Dr. Bilge\'nin kişisel gelişim ve mutlu yaşam üzerine pratik önerileri. Bu rehber kitap, hayatınızı daha anlamlı ve verimli kılmanız için somut adımlar sunuyor.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=6',
+        categories: ['Kişisel Gelişim', 'Rehber'],
+        tags: ['yaşam', 'gelişim', 'rehber'],
+        price: 19.99,
+        points: 100,
+        averageRating: 4.3,
+        ratingCount: 67,
+        readCount: 950,
+        pageCount: 180,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 8)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: false,
+        isPopular: false,
+        previewStart: 1,
+        previewEnd: 20,
+        pointPrice: 199,
+        content: _getDemoBookContent('Yaşamın Sırları'),
+      ),
+      BookModel(
+        id: 'ATB007',
+        title: 'Kod Savaşçıları',
+        author: 'Hakan Developer',
+        description:
+            'Programlama dünyasının kahramanları olan geliştiricilerin hikayesi. Teknoloji sektöründeki zorluklarla nasıl başa çıktıklarını anlatan ilham verici öyküler.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=7',
+        categories: ['Teknoloji', 'Biyografi'],
+        tags: ['programlama', 'teknoloji', 'geliştirici'],
+        price: 32.99,
+        points: 180,
+        averageRating: 4.7,
+        ratingCount: 91,
+        readCount: 1100,
+        pageCount: 350,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 5)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: true,
+        isPopular: false,
+        previewStart: 1,
+        previewEnd: 15,
+        pointPrice: 329,
+        content: _getDemoBookContent('Kod Savaşçıları'),
+      ),
+      BookModel(
+        id: 'ATB008',
+        title: 'Geleceğin Şehri',
+        author: 'Aylin Gelecek',
+        description:
+            'İstanbul 2050\'de nasıl görünecek? Bu distopik roman, çevre sorunları ve teknolojik gelişmelerin şehir yaşamını nasıl etkileyeceğini hayal ediyor.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=8',
+        categories: ['Distopya', 'Bilim Kurgu'],
+        tags: ['gelecek', 'şehir', 'distopya'],
+        price: 28.99,
+        points: 150,
+        averageRating: 4.4,
+        ratingCount: 134,
+        readCount: 1450,
+        pageCount: 290,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 3)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: false,
+        isPopular: true,
+        previewStart: 1,
+        previewEnd: 12,
+        pointPrice: 289,
+        content: _getDemoBookContent('Geleceğin Şehri'),
+      ),
+      BookModel(
+        id: 'ATB009',
+        title: 'Sessiz Gece',
+        author: 'Canan Gizem',
+        description:
+            'Küçük bir kasabada yaşanan gizemli olayları konu alan bu gerilim romanı. Dedektif Komiseri Metin\'in zorlu soruşturması okuyucuları son sayfaya kadar merakta bırakacak.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=9',
+        categories: ['Gerilim', 'Polisiye'],
+        tags: ['gizem', 'polisiye', 'gerilim'],
+        price: 26.99,
+        points: 135,
+        averageRating: 4.1,
+        ratingCount: 178,
+        readCount: 2300,
+        pageCount: 260,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 2)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: false,
+        isPopular: true,
+        previewStart: 1,
+        previewEnd: 14,
+        pointPrice: 269,
+        content: _getDemoBookContent('Sessiz Gece'),
+      ),
+      BookModel(
+        id: 'ATB010',
+        title: 'Derin Öğrenme Rehberi',
+        author: 'Prof. Dr. Ali Yapay',
+        description:
+            'Yapay zeka ve derin öğrenme konularında kapsamlı bir rehber. Hem teorik bilgi hem de pratik uygulamalar içeren bu kitap, AI öğrenmek isteyenler için mükemmel.',
+        coverImageUrl: 'https://picsum.photos/400/600?random=10',
+        categories: ['Eğitim', 'Teknoloji'],
+        tags: ['yapay zeka', 'öğrenme', 'teknoloji'],
+        price: 39.99,
+        points: 250,
+        averageRating: 4.9,
+        ratingCount: 56,
+        readCount: 780,
+        pageCount: 420,
+        language: 'tr',
+        createdAt: DateTime.now().subtract(const Duration(days: 1)),
+        updatedAt: DateTime.now(),
+        isPublished: true,
+        isFeatured: true,
+        isPopular: false,
+        previewStart: 1,
+        previewEnd: 20,
+        pointPrice: 399,
+        content: _getDemoBookContent('Derin Öğrenme Rehberi'),
+      ),
+    ];
+  }
 
-      await _firestore.collection(_booksCollection).doc(bookId).delete();
+  /// Demo kitap içeriği oluştur
+  String _getDemoBookContent(String title) {
+    return '''
+$title
 
-      if (kDebugMode) {
-        print('✅ BookService: Book deleted: $bookId');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error deleting book: $e');
-      }
-      throw 'Kitap silinirken hata oluştu: $e';
+Bu dijital kitabın demo içeriğidir. 
+
+Bölüm 1: Başlangıç
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+Bölüm 2: Gelişim
+
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+
+Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
+
+Bölüm 3: Sonuç
+
+Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.
+
+Bu kitabın devamı satın alma işleminden sonra görülebilir...
+''';
+  }
+}
+
+// Extension to add firstWhereOrNull method
+extension IterableExtension<T> on Iterable<T> {
+  T? firstWhereOrNull(bool Function(T) test) {
+    for (T element in this) {
+      if (test(element)) return element;
     }
-  }
-
-  // ==================== UTILITY METHODS ====================
-
-  /// Check if books collection exists and has data
-  Future<bool> hasBooksData() async {
-    try {
-      final snapshot = await _firestore
-          .collection(_booksCollection)
-          .limit(1)
-          .get();
-
-      return snapshot.docs.isNotEmpty;
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error checking books data: $e');
-      }
-      return false;
-    }
-  }
-
-  /// Get total books count
-  Future<int> getBooksCount() async {
-    try {
-      final snapshot = await _firestore.collection(_booksCollection).get();
-
-      return snapshot.docs.length;
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ BookService: Error getting books count: $e');
-      }
-      return 0;
-    }
-  }
-
-  // Demo mode for testing - Always true to support all users
-  bool get isDemoMode => true;
-
-  // In-memory storage for demo books
-  static final List<Book> _demoBooks = [];
-
-  /// Initialize demo books
-  void _initializeDemoBooks() {
-    if (_demoBooks.isEmpty) {
-      _demoBooks.addAll([
-        Book(
-          id: '1',
-          title: 'Suç ve Ceza',
-          author: 'Fyodor Dostoyevski',
-          description:
-              'Rus edebiyatının başyapıtlarından biri olan bu roman, suç işleyen bir gencin ruhsal çözülüşünü anlatır.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11467526/wh:true/wi:800',
-          category: 'Klasik',
-          price: 25.90,
-          content: _getSucVeCezaContent(),
-          createdAt: DateTime.now().subtract(const Duration(days: 30)),
-          updatedAt: DateTime.now().subtract(const Duration(days: 1)),
-        ),
-        Book(
-          id: '2',
-          title: 'Savaş ve Barış',
-          author: 'Lev Tolstoy',
-          description:
-              'Napolyon savaşları dönemini konu alan bu eser, tarih ve edebiyatın buluştuğu muhteşem bir roman.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11428765/wh:true/wi:800',
-          category: 'Klasik',
-          price: 45.50,
-          content: _getSavasVeBarisContent(),
-          createdAt: DateTime.now().subtract(const Duration(days: 25)),
-          updatedAt: DateTime.now().subtract(const Duration(days: 2)),
-        ),
-        Book(
-          id: '3',
-          title: 'Çalıkuşu',
-          author: 'Reşat Nuri Güntekin',
-          description:
-              'Türk edebiyatının en sevilen romanlarından biri. Feride\'nin hayat hikayesi.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11388234/wh:true/wi:800',
-          category: 'Türk Edebiyatı',
-          price: 18.75,
-          content: _getCalikusuContent(),
-          createdAt: DateTime.now().subtract(const Duration(days: 20)),
-          updatedAt: DateTime.now().subtract(const Duration(days: 3)),
-        ),
-        Book(
-          id: '4',
-          title: 'Vadideki Zambak',
-          author: 'Honoré de Balzac',
-          description:
-              'Aşk, tutku ve toplumsal eleştirinin harmanlandığı bu roman, Fransız edebiyatının걸작작입니다.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11398765/wh:true/wi:800',
-          category: 'Klasik',
-          price: 22.30,
-          content: _getVadidekiZambakContent(),
-          createdAt: DateTime.now().subtract(const Duration(days: 18)),
-          updatedAt: DateTime.now().subtract(const Duration(days: 1)),
-        ),
-        Book(
-          id: '5',
-          title: 'Küçük Prens',
-          author: 'Antoine de Saint-Exupéry',
-          description:
-              'Çocukların ve yetişkinlerin eşit sevgiyle okuduğu bu eser, hayatın anlamını sorgular.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11467890/wh:true/wi:800',
-          category: 'Çocuk',
-          price: 15.90,
-          content: _getKucukPrensContent(),
-          createdAt: DateTime.now().subtract(const Duration(days: 15)),
-          updatedAt: DateTime.now().subtract(const Duration(hours: 12)),
-        ),
-        Book(
-          id: '6',
-          title: 'İnsan Ne ile Yaşar',
-          author: 'Lev Tolstoy',
-          description:
-              'Tolstoy\'un derin felsefi düşüncelerini içeren bu kısa hikayeler kitabı.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11445623/wh:true/wi:800',
-          category: 'Felsefe',
-          price: 19.45,
-          createdAt: DateTime.now().subtract(const Duration(days: 12)),
-          updatedAt: DateTime.now().subtract(const Duration(hours: 6)),
-        ),
-        Book(
-          id: '7',
-          title: 'Satranç',
-          author: 'Stefan Zweig',
-          description:
-              'Nazi Almanya\'sında geçen bu novella, insan ruhunun derinliklerini keşfeder.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11434567/wh:true/wi:800',
-          category: 'Novella',
-          price: 12.60,
-          createdAt: DateTime.now().subtract(const Duration(days: 10)),
-          updatedAt: DateTime.now().subtract(const Duration(hours: 3)),
-        ),
-        Book(
-          id: '8',
-          title: 'Beyaz Diş',
-          author: 'Jack London',
-          description:
-              'Vahşi doğada geçen bu macera romanı, bir kurdun evcilleşme hikayesini anlatır.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11456789/wh:true/wi:800',
-          category: 'Macera',
-          price: 21.80,
-          createdAt: DateTime.now().subtract(const Duration(days: 8)),
-          updatedAt: DateTime.now().subtract(const Duration(hours: 1)),
-        ),
-        Book(
-          id: '9',
-          title: 'Simyacı',
-          author: 'Paulo Coelho',
-          description:
-              'Bir çobanın kendi efsanesini yaşama yolculuğunu anlatan bu roman, dünya çapında sevilir.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11478923/wh:true/wi:800',
-          category: 'Modern',
-          price: 24.70,
-          createdAt: DateTime.now().subtract(const Duration(days: 5)),
-          updatedAt: DateTime.now().subtract(const Duration(minutes: 30)),
-        ),
-        Book(
-          id: '10',
-          title: 'Kürk Mantolu Madonna',
-          author: 'Sabahattin Ali',
-          description:
-              'Türk edebiyatının en güzel aşk hikayelerinden biri. Berlin\'de geçen unutulmaz bir aşk.',
-          coverImageUrl:
-              'https://img.kitapyurdu.com/v1/getImage/fn:11489034/wh:true/wi:800',
-          category: 'Türk Edebiyatı',
-          price: 16.90,
-          createdAt: DateTime.now().subtract(const Duration(days: 3)),
-          updatedAt: DateTime.now().subtract(const Duration(minutes: 15)),
-        ),
-      ]);
-
-      if (kDebugMode) {
-        print(
-          '📚 BookService: Demo books initialized (${_demoBooks.length} books)',
-        );
-      }
-    }
-  }
-
-  // ==================== DEMO CONTENT GENERATORS ====================
-
-  String _getSucVeCezaContent() {
-    return '''
-BÖLÜM 1
-
-Temmuz ayının son derece sıcak ve bunaltıcı bir gününde, akşama doğru, genç bir adam K--ski sokağından çıktı ve ağır ağır, kararsız adımlarla H-- köprüsüne yöneldi.
-
-O büyük bir apartman dairesinde kiracı olarak kalıyordu, ama ev sahibesiyle karşılaşmaktan çekiniyordu. Kadına epey para borcu vardı ve onunla karşılaşmaktan korkuyordu.
-
-Genç adamın adı Rodion Romanoviç Raskolnikov'du. Üniversitede hukuk okuyordu, ama artık derslerine gitmiyor, okumuyordu. Çok fakir düşmüş, aylardır uygun bir iş bulamamıştı.
-
-Bu gün, tuhaf bir karar vermişti. Aklından geçen korkunç plana tekrar tekrar dönüyordu. "Ben bunu yapabilir miyim?" diye kendi kendine soruyordu. "Hayır, bu imkansız... Bu sadece aptalca bir rüya..."
-
-Ama yine de gidiyordu. Gittiği yer belli: yaşlı tefeci kadının eviydi.
-
-BÖLÜM 2
-
-Alëna İvanovna'nın kapısına geldiğinde ellerini titriyordu. Yaşlı kadın oldukça zengin biriydi, ama çok cimri ve acımasızdı. Raskolnikov ona daha önce de bazı eşyalarını rehin vermişti.
-
-"Yine mi geldin?" dedi yaşlı kadın kapıyı açarken. "Ne istiyorsun bu sefer?"
-
-"Bir şey rehin vermek istiyorum," dedi Raskolnikov titrek bir sesle.
-
-Kadın onu içeri aldı. Raskolnikov cebinden küçük bir gümüş saat çıkardı. Bu saati babası ona vermişti.
-
-"Bu kadar az para... Bu saat çok değerli değil," dedi Alëna İvanovna saati incelerken.
-
-Raskolnikov'un kafası karışıktı. Aklından korkunç düşünceler geçiyordu. "Şimdi mi yapmalıyım?" diye düşündü. "Bu kadın kötü, kimse onu sevmez... Ama hayır, ben bunu yapamam..."
-
-BÖLÜM 3
-
-Ertesi gün Raskolnikov çok rahatsızdı. Geceyi hiç uyumadan geçirmişti. Sürekli aynı şeyi düşünüyordu. Bir yandan vicdanı onu suçluyordu, öte yandan akla mantığa sığmayan fikirler zihnini kemiriyordu.
-
-"Eğer ben bu işi yaparsam," diye düşünüyordu, "bu para ile üniversitemi bitirebilirim. Annemle kız kardeşime yardım edebilirim. O yaşlı kadın zaten hiç kimsenin işine yaramıyor..."
-
-Ama sonra kendine geliyordu: "Hayır! Bu korkunç bir düşünce. Ben nasıl bir insana dönüştüm? Bu düşünce bile beni rezil ediyor."
-
-Sokağa çıktı, aimlessly dolaştı. Nihayetinde tekrar o meşhur apartmana doğru yürümeye başladı...
-''';
-  }
-
-  String _getSavasVeBarisContent() {
-    return '''
-BÖLÜM 1
-Moskova, 1805
-
-- "Eh, Prens, Cenova ve Lucca artık Buonaparte ailesinin mülkleri haline geldi. Ama sizi uyarıyorum, eğer bu savaş hakkında bahsetmeye devam etmezseniz... artık dostum değilsiniz," dedi Anna Pavlovna Scherer, Çar'ın maiyetinden biri olan Prens Vasily'ye.
-
-Bu sözler 1805 yılının Temmuz ayında, Petersburg'daki zarif bir salonda söylenmişti. Anna Pavlovna prestijli bir soirée veriyordu ve Rus soylularının elit üyeleri burada toplanmıştı.
-
-"Napolyon tehlikeli bir adam," diye devam etti Anna Pavlovna. "O sadece Fransa'yı değil, tüm Avrupa'yı ele geçirmek istiyor."
-
-Prens Vasily gülümsedi. O yaşlı, tecrübeli bir diplomattı. "Anna Pavlovna, siz her zaman abartıyorsunuz. Napolyon elbette tehlikeli, ama..."
-
-BÖLÜM 2
-Rostov Ailesi
-
-Aynı dönemde, Moskova'da Rostov ailesi de savaş hazırlıklarını konuşuyordu. Count İlya Rostov zengin bir soyluydu ve çok misafirperver biriydi.
-
-"Nikolenka'yı orduya göndermemiz gerekiyor," dedi Countess Natalya Rostova, genç oğlu Nikolay'dan bahsederken. "O artık bir erkek ve vatanına hizmet etmeli."
-
-Nikolay Rostov on sekiz yaşındaydı, genç, yakışıklı ve macera seversen. Savaş fikri onu heyecanlandırıyordu.
-
-"Evet anne! Ben savaşmak istiyorum. Napolyon'u durdurmak için elimizden geleni yapmalıyız," dedi kararlı bir şekilde.
-
-Küçük kız kardeşi Natasha ise endişeliydi. O henüz on üç yaşındaydı, ama çok hassas ve akıllı bir kızdı.
-
-BÖLÜM 3
-Pierre Bezukhov
-
-Pierre Bezukhov, Count Bezukhov'un gayrimeşru oğluydu. Çok zengin olmasına rağmen, kendini mutsuz ve kayıp hissediyordu. O dönemin felsefî akımlarına ilgi duyuyordu.
-
-"Bu savaş neyi çözecek?" diye düşünüyordu Pierre. "İnsanlar neden birbirini öldürmeye bu kadar istekli?"
-
-O, Anna Pavlovna'nın soirée'sine katılmıştı ve oradaki sohbetleri dinliyordu. Soyluların savaş konusundaki heyecanları onu rahatsız ediyordu.
-
-"Belki de bu savaş gerekli," dedi kendi kendine. "Ama keşke barışçıl yollarla çözülebilseydi..."
-
-Bu gece, Pierre'nin hayatı değişecekti...
-''';
-  }
-
-  String _getCalikusuContent() {
-    return '''
-BİRİNCİ KISIM
-
-Feride on yedi yaşındaydı. İstanbul'da, Erenköy'deki evlerinde yaşıyordu. Babası Faiz Bey, eskiden varlıklı bir aile ferdi olmasına rağmen, artık maddi sıkıntılar çekiyordu.
-
-Bu sabah Feride pencereden Marmara'yı seyrediyordu. Deniz çok sakindi ve güneşin altında pırıl pırıl parlıyordu.
-
-"Ne yapacağım ben?" diye düşünüyordu. "Babam beni evlendirmek istiyor, ama ben henüz çok gencim."
-
-Feride çok güzel bir kızdı. Uzun kumral saçları, yeşil gözleri ve narin yapısıyla İstanbul'un en güzel kızlarından biriydi. Ama güzelliği onu mutlu etmiyordu.
-
-"Öğretmen olmak istiyorum," diye mırıldandı. "Belki böyle kendi ayaklarım üzerinde durabilirim."
-
-BİRİNCİ BÖLÜM
-Karar
-
-Faiz Bey o akşam eve geldiğinde müjdeli haberini verdi:
-
-"Feride, kızım! Sana çok iyi bir kısmet çıktı. Münir Bey'in oğlu Kemal senle evlenmek istiyor."
-
-Feride'nin yüzü bembeyaz oldu. "Baba, ben henüz evlenecek yaşta değilim."
-
-"Saçmalama kızım. Sen artık büyük bir hanımefendisin. Kemal Bey çok iyi bir aile çocuğu, hem de zengin."
-
-"Ama baba, ben onu sevmiyorum. Hem de ben öğretmen olmak istiyorum."
-
-Faiz Bey sinirlenmeye başladı. "Öğretmenlik! Bu ne biçim düşünce? Bir hanımefendiye yakışır mı öğretmenlik yapmak?"
-
-İKİNCİ BÖLÜM
-Kaçış
-
-Feride o gece uzun uzun düşündü. Babası onu zorla evlendirecekti, ama o buna razı değildi. Tek çare vardı: kaçmak.
-
-Ertesi sabah erkenden kalktı ve bavuluna birkaç eşya koydu. Annesinin eski mücevherlerinden birkaçını da aldı. Bu paralarla bir süre idare edebilirdi.
-
-"Anadolu'da bir kasabada öğretmenlik yapacağım," diye düşündü. "Orada kimse beni tanımaz ve özgürce yaşayabilirim."
-
-İstanbul'dan Anadolu'ya gidecek vapura binerken kalbi hızla çarpıyordu. Bu büyük bir maceraydı ve ne ile karşılaşacağını bilmiyordu.
-
-"Allah'ım, bana yardım et," diye dua etti sessizce.
-
-Vapur düdük çaldı ve yavaş yavaş İstanbul'dan uzaklaştı. Feride arkasına bakmadı. Artık yeni bir hayat başlıyordu...
-''';
-  }
-
-  String _getVadidekiZambakContent() {
-    return '''
-BİRİNCİ BÖLÜM
-
-Félix de Vandenesse yirmi iki yaşında genç, yakışıklı bir asilzadeydi. Tours yakınlarındaki Clochegourde şatosuna geldiği o bahar günü, hayatının en önemli anını yaşayacağını bilmiyordu.
-
-Bahçede yürürken, güzel bir kadının beyaz elbisesiyle zambaklar arasında durduğunu gördü. Bu kadın Henriette de Mortsauf'tu - evli, iki çocuk annesi ve Félix'ten altı yaş büyük.
-
-"Madame," dedi Félix, şapkasını çıkararak. "Bu güzel bahçenizde kaybolmuşum. Beni affeder misiniz?"
-
-Henriette döndü ve ona baktı. O an, ikisinin de hayatı değişti. Gözleri buluştuğunda, tarif edilemez bir şey oldu.
-
-"Tabii ki, Monsieur. Burası Clochegourde. Ben Madame de Mortsauf."
-
-Félix'in kalbi çılgınca atmaya başladı. Bu kadında öyle bir güzellik, öyle bir zarafet vardı ki...
-
-İKİNCİ BÖLÜM
-Yasak Aşk
-
-Günler geçti. Félix her gün şatoya gelmeye başladı. Henriette'in kocası Monsieur de Mortsauf yaşlı ve hastalıklı bir adamdı. Çocukları Jacques ve Madeleine ile ilgilenirken, Henriette çok yorgun düşüyordu.
-
-"Siz buraya gelince evimiz aydınlanıyor," dedi Henriette bir gün. "Félix, siz çok iyi bir arkadaşsınız."
-
-Ama Félix'in hisleri arkadaşlıktan çok daha derinleriyle geliyordu. O Henriette'e aşıktı, ama bu aşkını hiçbir zaman açıkça söyleyemiyordu.
-
-"Henriette," diye mırıldandı bir gün yalnızken. "Sizi seviyorum, ama bu yasak bir aşk. Siz evlisiniz ve ben sadece genç bir adamım."
-
-ÜÇÜNCÜ BÖLÜM
-Mektuplar
-
-Félix Paris'e dönmek zorunda kaldığında, Henriette ile mektuplamaya başladılar. Bu mektuplar iki kalbin en derin duygularını içeriyordu.
-
-"Sevgili Félix," yazıyordu Henriette, "sizin dostluğunuz benim hayatımın en değerli hazinesi. Lütfen beni unutmayın."
-
-Félix de ona şu satırları yazıyordu: "Henriette, siz benim ruhuma işlemiş bir zambaksınız. Sizin yanınızda olmadığım her an, sanki ölü gibiyim."
-
-Ama bu aşk hiçbir zaman gerçekleşemeyecekti. Toplumun kuralları, ahlaki değerler ve Henriette'in evli olması... Hepsi bu aşkın önünde büyük engellerdi.
-
-Félix bu acıyı kalbinde taşıyacak, Henriette ise vazifesini yerine getirmeye devam edecekti...
-''';
-  }
-
-  String _getKucukPrensContent() {
-    return '''
-BÖLÜM I
-
-Altı yaşındayken, "Yaşanmış Hikayeler" adlı virgin ormanlar hakkındaki bir kitapta muhteşem bir resim gördüm. Bir boa yılanının vahşi bir hayvanı yuttuğu resimdi.
-
-Kitapta şöyle yazıyordu: "Boa yılanları avlarını bütün halinde yutarlar, çiğnemezler. Sonra artık hareket edemezler ve altı ay uyuyarak sindirim yaparlar."
-
-Bu konuyu çok düşündüm ve renkli kalemimle ilk resmimi çizdim. 1 numaralı çizimim böyleydi:
-
-Şaheserimi büyüklere gösterdim ve onlara şapkanın korkutucu olup olmadığını sordum.
-
-Bana şu karşılığı verdiler: "Şapka neden korkutucu olsun?"
-
-Benim resmim şapka değildi. Bir fili sindiren boa yılanıydı. Bunun üzerine büyüklerin anlayabilmesi için boa yılanının içini çizdim. Büyükler hep açıklama isterler. 2 numaralı çizimim şöyleydi:
-
-BÖLÜM II
-
-Böylece altı yaşında parlak bir kariyeri - ressam kariyerimi - bıraktım. 1 ve 2 numaralı çizimlerimin başarısızlığı beni cesaret kırmıştı.
-
-Büyükler hiçbir şeyi kendileri anlayamazlar. Çocuklar için onlara durmadan açıklama yapmak çok yorucu bir iştir.
-
-Bu nedenle başka bir meslek seçmek zorunda kaldım ve pilot olmayı öğrendim. Dünyanın her tarafında uçtum. Gerçekten de coğrafya bana çok işe yaradı.
-
-Çin ile Arizona'yı bir bakışta ayırt edebiliyordum. Gecenin ortasında kaybolursanız, bu çok yararlıdır.
-
-BÖLÜM III
-
-Hayatım boyunca ciddi insanlarla çok karşılaştım. Büyükler arasında uzun zaman yaşadım. Onları çok yakından tanıdım. Bu da düşüncemi pek değiştirmedi.
-
-Ne zaman akıllı biriyle karşılaştıysam, ona hep 1 numaralı çizimimi gösterdim. Bu çizimi hep yanımda taşırım. Gerçekten anlayışlı biri olup olmadığını öğrenmek isterdim.
-
-Ama hep şu karşılığı alırdım: "Bu bir şapka."
-
-O zaman ne boa yılanlarından, ne virgin ormanlardan, ne de yıldızlardan bahsederdim. Onun seviyesine inerdim. Briç, golf, politika ve kravatlardan konuşurdum. O zaman da bu büyük adamı, böylesine akıllı bir adam tanıdığı için çok memnun olurdu.
-
-BÖLÜM IV
-
-Sahara çölünde motor arızası nedeniyle zorunlu iniş yapmıştım. Yanımda ne bir teknisyen, ne de bir yolcu vardı. Zor bir tamiri tek başıma yapmaya girişecektim.
-
-Bu benim için ölüm kalım meselesiydi. İçecek suyum ancak sekiz gün yetecekti.
-
-İlk gece kum üzerinde, binlerce kilometre uzakta herhangi bir yerde, denizin ortasında sal üzerindeki gemi kazası geçirmişlerden daha yalnız uyudum.
-
-Gün doğarken tuhaf, küçük bir sesin beni uyandırdığını düşünebilirsiniz:
-
-"Lütfen... bana bir koyun çizer misin?"
-
-"Hıı!"
-
-"Bana bir koyun çizer misin..."
-''';
+    return null;
   }
 }
