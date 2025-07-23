@@ -1,0 +1,112 @@
+{
+  "appTitle": "Altertale",
+  "settings": "Ayarlar",
+  "theme": "Tema",
+  "language": "Dil",
+  "notifications": "Bildirimler",
+  "synchronization": "Senkronizasyon",
+  "other": "Diğer",
+  "themeMode": "Tema Modu",
+  "fontSize": "Yazı Tipi Boyutu",
+  "lineSpacing": "Satır Aralığı",
+  "readingBackground": "Okuma Arka Planı",
+  "autoSync": "Otomatik Senkronizasyon",
+  "resetSettings": "Ayarları Sıfırla",
+  "about": "Hakkında",
+  "lightTheme": "Açık Tema",
+  "darkTheme": "Koyu Tema",
+  "systemTheme": "Sistem",
+  "small": "Küçük",
+  "medium": "Orta",
+  "large": "Büyük",
+  "extraLarge": "Çok Büyük",
+  "tight": "Dar",
+  "normal": "Normal",
+  "wide": "Geniş",
+  "white": "Beyaz",
+  "gray": "Gri",
+  "sepia": "Sepya",
+  "black": "Siyah",
+  "enabled": "Açık",
+  "disabled": "Kapalı",
+  "on": "Açık",
+  "off": "Kapalı",
+  "selectThemeMode": "Tema Modu Seçin",
+  "selectFontSize": "Yazı Tipi Boyutu Seçin",
+  "selectLineSpacing": "Satır Aralığı Seçin",
+  "selectReadingBackground": "Okuma Arka Planı Seçin",
+  "selectLanguage": "Dil Seçin",
+  "resetSettingsTitle": "Ayarları Sıfırla",
+  "resetSettingsMessage": "Tüm ayarları varsayılan değerlere döndürmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
+  "cancel": "İptal",
+  "reset": "Sıfırla",
+  "close": "Kapat",
+  "refresh": "Yenile",
+  "refreshSettings": "Ayarları Yenile",
+  "version": "Versiyon",
+  "copyright": "© 2024 Altertale. Tüm hakları saklıdır.",
+  "errorUpdatingTheme": "Tema modu güncellenirken hata oluştu: {error}",
+  "errorUpdatingFontSize": "Yazı tipi boyutu güncellenirken hata oluştu: {error}",
+  "errorUpdatingLineSpacing": "Satır aralığı güncellenirken hata oluştu: {error}",
+  "errorUpdatingReadingBackground": "Okuma arka planı güncellenirken hata oluştu: {error}",
+  "errorUpdatingLanguage": "Dil tercihi güncellenirken hata oluştu: {error}",
+  "errorUpdatingNotifications": "Bildirim ayarı güncellenirken hata oluştu: {error}",
+  "errorUpdatingAutoSync": "Otomatik senkronizasyon ayarı güncellenirken hata oluştu: {error}",
+  "errorResettingSettings": "Ayarlar sıfırlanırken hata oluştu: {error}",
+  "@errorUpdatingTheme": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingFontSize": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingLineSpacing": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingReadingBackground": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingLanguage": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingNotifications": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingAutoSync": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorResettingSettings": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
+}

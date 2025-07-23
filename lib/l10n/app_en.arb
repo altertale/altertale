@@ -1,0 +1,119 @@
+{
+  "appTitle": "Altertale",
+  "settings": "Settings",
+  "theme": "Theme",
+  "language": "Language",
+  "notifications": "Notifications",
+  "synchronization": "Synchronization",
+  "other": "Other",
+  "themeMode": "Theme Mode",
+  "fontSize": "Font Size",
+  "lineSpacing": "Line Spacing",
+  "readingBackground": "Reading Background",
+  "autoSync": "Auto Sync",
+  "resetSettings": "Reset Settings",
+  "about": "About",
+  "lightTheme": "Light Theme",
+  "darkTheme": "Dark Theme",
+  "systemTheme": "System",
+  "small": "Small",
+  "medium": "Medium",
+  "large": "Large",
+  "extraLarge": "Extra Large",
+  "tight": "Tight",
+  "normal": "Normal",
+  "wide": "Wide",
+  "white": "White",
+  "gray": "Gray",
+  "sepia": "Sepia",
+  "black": "Black",
+  "enabled": "Enabled",
+  "disabled": "Disabled",
+  "on": "On",
+  "off": "Off",
+  "selectThemeMode": "Select Theme Mode",
+  "selectFontSize": "Select Font Size",
+  "selectLineSpacing": "Select Line Spacing",
+  "selectReadingBackground": "Select Reading Background",
+  "selectLanguage": "Select Language",
+  "resetSettingsTitle": "Reset Settings",
+  "resetSettingsMessage": "Are you sure you want to reset all settings to default values? This action cannot be undone.",
+  "cancel": "Cancel",
+  "reset": "Reset",
+  "close": "Close",
+  "refresh": "Refresh",
+  "refreshSettings": "Refresh Settings",
+  "version": "Version",
+  "copyright": "© 2024 Altertale. All rights reserved.",
+  "errorUpdatingTheme": "Error updating theme mode: {error}",
+  "errorUpdatingFontSize": "Error updating font size: {error}",
+  "errorUpdatingLineSpacing": "Error updating line spacing: {error}",
+  "errorUpdatingReadingBackground": "Error updating reading background: {error}",
+  "errorUpdatingLanguage": "Error updating language: {error}",
+  "errorUpdatingNotifications": "Error updating notifications: {error}",
+  "errorUpdatingAutoSync": "Error updating auto sync: {error}",
+  "errorResettingSettings": "Error resetting settings: {error}",
+  "@errorUpdatingTheme": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingFontSize": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingLineSpacing": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingReadingBackground": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingLanguage": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingLanguage": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingNotifications": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorUpdatingAutoSync": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@errorResettingSettings": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
+}
