@@ -84,32 +84,34 @@ class BookModel {
     );
   }
 
-  /// Create BookModel from simple Book model
-  factory BookModel.fromBook(Book book) {
+  // Factory constructor from existing Book model
+  factory BookModel.fromBook(dynamic book) {
     return BookModel(
       id: book.id,
       title: book.title,
       author: book.author,
       description: book.description,
-      coverImageUrl: book.coverImageUrl,
-      categories: [book.category], // Convert single category to list
+      coverImageUrl: book.coverImageUrl ?? '',
+      categories: book.categories?.isNotEmpty == true
+          ? List<String>.from(book.categories)
+          : ['Genel'],
       tags: [], // Default empty tags
-      price: book.price,
+      price: book.price?.toDouble() ?? 0.0,
       points: 0, // Default points
+      pointPrice: 0, // Default point price
       averageRating: 0.0, // Default rating
       ratingCount: 0, // Default rating count
       readCount: 0, // Default read count
-      pageCount: 0, // Default page count
-      language: 'tr', // Default language
-      createdAt: book.createdAt ?? DateTime.now(),
-      updatedAt: book.updatedAt ?? DateTime.now(),
-      isPublished: true, // Default published
+      pageCount: 100, // Default page count
+      language: 'tr', // Default Turkish
+      isPublished: true, // Assume published
       isFeatured: false, // Default not featured
       isPopular: false, // Default not popular
       previewStart: 0, // Default preview start
-      previewEnd: 10, // Default preview end
-      pointPrice: 0, // Default point price
-      content: null, // Default null content
+      previewEnd: 100, // Default preview end
+      createdAt: book.createdAt ?? DateTime.now(),
+      updatedAt: book.updatedAt ?? DateTime.now(),
+      content: book.content ?? '', // Include content for reading
     );
   }
 
@@ -138,6 +140,35 @@ class BookModel {
       'previewEnd': previewEnd,
       'pointPrice': pointPrice,
       'content': content, // Add content field
+    };
+  }
+
+  /// Convert BookModel to Map for Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'author': author,
+      'description': description,
+      'coverImageUrl': coverImageUrl,
+      'categories': categories,
+      'tags': tags,
+      'price': price,
+      'points': points,
+      'averageRating': averageRating,
+      'ratingCount': ratingCount,
+      'readCount': readCount,
+      'pageCount': pageCount,
+      'language': language,
+      'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'isPublished': isPublished,
+      'isFeatured': isFeatured,
+      'isPopular': isPopular,
+      'previewStart': previewStart,
+      'previewEnd': previewEnd,
+      'pointPrice': pointPrice,
+      'content': content,
     };
   }
 
@@ -255,6 +286,12 @@ class BookModel {
     }
     return '${description.substring(0, 147)}...';
   }
+
+  /// Backward compatibility - get first category as primary category
+  String get category => categories.isNotEmpty ? categories.first : 'Genel';
+
+  /// Get formatted category list
+  String get categoriesText => categories.join(', ');
 
   @override
   bool operator ==(Object other) {

@@ -8,7 +8,9 @@ import '../../services/order_service.dart';
 import '../../services/payment_service.dart';
 import '../../models/cart_item.dart';
 import '../../models/book_model.dart';
+import '../../models/order.dart';
 import '../../widgets/widgets.dart';
+import '../../services/purchase_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -639,7 +641,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             );
 
             await myBooksProvider.addPurchasedBookInstant(book, order);
+
+            // Clear purchase cache to ensure immediate UI updates
+            final purchaseService = PurchaseService();
+            purchaseService.addToPurchasedCache(item.bookId);
           }
+
+          // Clear purchase service cache to ensure fresh state
+          final purchaseService = PurchaseService();
+          await purchaseService.clearPurchaseCache();
 
           print(
             '📚 CheckoutScreen: Updated MyBooksProvider with ${order.items.length} purchased books',

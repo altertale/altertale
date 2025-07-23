@@ -1,111 +1,144 @@
 import 'package:flutter/material.dart';
-import '../../models/book.dart';
-import '../../widgets/books/preview_reader.dart';
+import '../../models/book_model.dart';
 
 /// Preview Reading Screen
-/// Allows users to preview a book before purchasing
-class PreviewReadingScreen extends StatelessWidget {
-  final Book book;
+/// Shows a preview of the book content before purchase
+class PreviewReadingScreen extends StatefulWidget {
+  final BookModel book;
 
   const PreviewReadingScreen({super.key, required this.book});
 
   @override
+  State<PreviewReadingScreen> createState() => _PreviewReadingScreenState();
+}
+
+class _PreviewReadingScreenState extends State<PreviewReadingScreen> {
+  int _currentPage = 0;
+  late List<String> _previewPages;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializePreview();
+  }
+
+  void _initializePreview() {
+    // Generate preview content
+    _previewPages = _generatePreviewContent();
+  }
+
+  List<String> _generatePreviewContent() {
+    // For demo purposes, generate some preview content
+    return [
+      '''${widget.book.title}
+
+Yazar: ${widget.book.author}
+
+${widget.book.description}
+
+Bu bir önizleme sayfasıdır. Kitabın tam içeriğini görmek için satın almanız gerekmektedir.''',
+
+      '''Bölüm 1: Başlangıç
+
+Bu bölümde hikayemizin temelleri atılır. Karakterlerimizle tanışır, onların dünyasına adım atarız.
+
+[Önizleme sınırına ulaştınız]
+
+Kitabın devamını okumak için satın alın.''',
+
+      '''Bu kitapta:
+
+• ${widget.book.pageCount} sayfa dolu dolu içerik
+• Etkileyici karakter gelişimi
+• Sürükleyici olay örgüsü
+• Unutulmaz anlar
+
+Tam deneyim için satın alın!''',
+    ];
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text('${book.title} - Önizleme'),
-        backgroundColor: theme.colorScheme.surface,
-        elevation: 0,
+        title: Text(widget.book.title),
+        backgroundColor: colorScheme.surfaceVariant,
         actions: [
           IconButton(
             icon: const Icon(Icons.shopping_cart),
             onPressed: () {
-              // Add to cart from preview
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${book.title} sepete eklendi'),
-                  action: SnackBarAction(
-                    label: 'Sepete Git',
-                    onPressed: () {
-                      Navigator.of(context).pushNamed('/cart');
-                    },
-                  ),
-                ),
-              );
+              Navigator.of(context).pop();
+              // Could trigger purchase dialog here
             },
           ),
         ],
       ),
       body: Column(
         children: [
-          // Preview Info
+          // Preview indicator
           Container(
             width: double.infinity,
-            color: theme.colorScheme.primaryContainer,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
+            color: colorScheme.primaryContainer,
             child: Row(
               children: [
-                Icon(
-                  Icons.preview,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
+                Icon(Icons.visibility, color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Bu kitabın önizlemesini okuyorsunuz. Tam sürümü için satın alın.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
+                Text(
+                  'Önizleme Modu',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${_currentPage + 1}/${_previewPages.length}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.primary,
                   ),
                 ),
               ],
             ),
           ),
-          // Preview Content
+
+          // Content
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Önizleme İçeriği',
-                    style: theme.textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(book.description, style: theme.textTheme.bodyLarge),
-                  const SizedBox(height: 24),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Devamını okumak için kitabı satın alın...',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontStyle: FontStyle.italic,
-                      ),
-                      textAlign: TextAlign.center,
+            child: PageView.builder(
+              itemCount: _previewPages.length,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentPage = index;
+                });
+              },
+              itemBuilder: (context, index) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    _previewPages[index],
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      height: 1.6,
+                      letterSpacing: 0.3,
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-          // Purchase Prompt
+
+          // Bottom action bar
           Container(
-            width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
+              color: colorScheme.surfaceVariant,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 4,
                   offset: const Offset(0, -2),
                 ),
               ],
@@ -113,31 +146,40 @@ class PreviewReadingScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Devamını okumak için kitabı satın alın',
-                  style: theme.textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${book.price.toStringAsFixed(2)} ₺',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold,
+                // Progress indicator
+                LinearProgressIndicator(
+                  value: (_currentPage + 1) / _previewPages.length,
+                  backgroundColor: colorScheme.outline.withValues(alpha: 0.3),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    colorScheme.primary,
                   ),
                 ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(
-                        context,
-                      ).pushNamed('/book-detail', arguments: book.id);
-                    },
-                    child: const Text('Satın Al'),
-                  ),
+
+                const SizedBox(height: 12),
+
+                // Action buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Geri Dön'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          // Could trigger purchase flow here
+                        },
+                        child: Text(
+                          '₺${widget.book.price.toStringAsFixed(2)} - Satın Al',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -145,30 +187,5 @@ class PreviewReadingScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  List<String> _generatePreviewPages(Book book) {
-    // Generate sample preview pages based on book description
-    final previewText = book.description;
-    final words = previewText.split(' ');
-    final pages = <String>[];
-
-    // Create pages with approximately 100 words each
-    for (int i = 0; i < words.length; i += 100) {
-      final endIndex = (i + 100).clamp(0, words.length);
-      final pageText = words.sublist(i, endIndex).join(' ');
-      pages.add(pageText);
-
-      // Limit to preview pages only
-      if (pages.length >= 5) {
-        // Default preview limit
-        break;
-      }
-    }
-
-    // Add some locked pages to show the preview limitation
-    pages.addAll(List.generate(5, (index) => 'Kilitli Sayfa ${index + 1}'));
-
-    return pages;
   }
 }

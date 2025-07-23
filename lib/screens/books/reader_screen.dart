@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/book.dart';
+import '../../models/book_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/reading_progress_service.dart';
 import '../../services/book_service.dart';
@@ -13,7 +13,7 @@ import '../../widgets/common/subtitle_text.dart';
 /// Sayfa navigasyonu, okuma ilerlemesi takibi ve kullanıcı dostu tasarım içerir.
 class ReaderScreen extends StatefulWidget {
   final String bookId;
-  final Book? book; // Optional, will be fetched if not provided
+  final BookModel? book; // Optional, will be fetched if not provided
 
   const ReaderScreen({super.key, required this.bookId, this.book});
 
@@ -28,7 +28,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   late ReadingProgressService _readingProgressService;
 
   // ==================== STATE ====================
-  Book? _book;
+  BookModel? _book;
   List<String> _pages = [];
   int _currentPage = 0;
   int _totalPages = 0;
@@ -83,7 +83,11 @@ class _ReaderScreenState extends State<ReaderScreen>
       });
 
       // Use provided book or fetch from service
-      _book = widget.book ?? await _bookService.getBookById(widget.bookId);
+      if (widget.book != null) {
+        _book = widget.book as BookModel?;
+      } else {
+        _book = await _bookService.getBookById(widget.bookId);
+      }
 
       if (_book == null) {
         setState(() {
@@ -128,7 +132,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
   }
 
-  List<String> _generateDemoContent(Book book) {
+  List<String> _generateDemoContent(BookModel book) {
     // Use the new book.content field if available, otherwise fallback to description
     final baseContent = book.content ?? book.description;
     final pages = <String>[];
@@ -187,7 +191,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     return pages;
   }
 
-  String _generateRandomPage(Book book, int pageNumber) {
+  String _generateRandomPage(BookModel book, int pageNumber) {
     final sampleTexts = [
       'Bu hikayenin başlangıcı çok eskiye dayanır. O zamanlar şehirde henüz teknoloji yaygın değildi ve insanlar daha sade bir hayat sürüyordu.',
       'Kahramanımız sabah erkenden uyanıp pencereden dışarıyı izledi. Güneş henüz doğmamış, sokaklar sessizdi.',

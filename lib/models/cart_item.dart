@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'book_model.dart';
 
 /// Cart Item Model for Shopping Cart
 ///
@@ -118,7 +119,7 @@ class CartItem {
     };
   }
 
-  /// Create a copy of CartItem with updated fields
+  /// Create a copy of CartItem with updated values
   CartItem copyWith({
     String? id,
     String? bookId,
@@ -252,24 +253,20 @@ class CartItem {
     );
   }
 
-  /// Create CartItem from Book model
-  static CartItem fromBook({
-    required String bookId,
-    required String title,
-    required String author,
-    required String imageUrl,
-    required double price,
+  /// Create CartItem from BookModel
+  static CartItem fromBookModel({
+    required BookModel book,
     required String userId,
     int quantity = 1,
     String? cartItemId,
   }) {
     return CartItem(
       id: cartItemId ?? '',
-      bookId: bookId,
-      title: title,
-      author: author,
-      imageUrl: imageUrl,
-      price: price,
+      bookId: book.id,
+      title: book.title,
+      author: book.author,
+      imageUrl: book.coverImageUrl,
+      price: book.price,
       quantity: quantity,
       userId: userId,
       addedAt: DateTime.now(),

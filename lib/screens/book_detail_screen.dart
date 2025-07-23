@@ -1,75 +1,85 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+
 import '../providers/auth_provider.dart';
+import '../providers/cart_provider.dart';
+import '../providers/favorites_provider.dart';
+import '../widgets/auth/auth_wrapper.dart';
+import '../widgets/books/preview_reader.dart';
+import '../widgets/widgets.dart'; // Import all custom widgets
 import '../services/book_service.dart';
 import '../services/cart_service.dart';
 import '../services/favorites_service.dart';
-import '../services/review_service.dart';
-import '../models/book.dart';
-import '../models/cart_item.dart';
-import '../widgets/common/custom_button.dart';
-import '../widgets/common/title_text.dart';
-import '../widgets/common/subtitle_text.dart';
-import '../widgets/common/rounded_card.dart';
-import 'books/preview_reading_screen.dart';
-import '../widgets/dialogs/purchase_confirmation_dialog.dart';
+import '../services/share_service.dart';
 import '../services/purchase_service.dart';
 import '../models/book_model.dart';
+import '../constants/app_colors.dart';
+import '../constants/app_themes.dart';
 import '../screens/books/reading_screen.dart';
+import '../screens/books/preview_reading_screen.dart';
+import '../dialogs/purchase_confirmation_dialog.dart';
 
-/// Book Detail Screen - Kitap Detay Ekranı
-///
-/// Firestore'dan gerçek kitap verilerini alır ve detaylarını gösterir.
-/// Satın alma, favorilere ekleme gibi gelecek özellikler için hazır yapı.
 class BookDetailScreen extends StatefulWidget {
-  final String bookId;
+  final BookModel? book;
+  final String? bookId;
 
-  const BookDetailScreen({super.key, required this.bookId});
+  const BookDetailScreen({super.key, this.book, this.bookId});
 
   @override
   State<BookDetailScreen> createState() => _BookDetailScreenState();
 }
 
-class _BookDetailScreenState extends State<BookDetailScreen> {
+class _BookDetailScreenState extends State<BookDetailScreen>
+    with TickerProviderStateMixin {
   final BookService _bookService = BookService();
   final CartService _cartService = CartService();
   final FavoritesService _favoritesService = FavoritesService();
-  final ReviewService _reviewService = ReviewService();
+  final ShareService _shareService = ShareService();
 
-  late String _bookId;
-  Book? _book;
-  bool _isLoading = false;
-  bool _isFavorite = false;
-  String? _errorMessage;
+  BookModel? _book;
+  bool _isLoading = true;
+  bool _isAddingToCart = false;
+  bool _isTogglingFavorite = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _bookId = widget.bookId;
-    _loadBook();
+    _loadBookData();
   }
 
-  Future<void> _loadBook() async {
+  /// Load book data
+  Future<void> _loadBookData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
     try {
-      setState(() {
-        _isLoading = true;
-      });
-      final book = await _bookService.getBookById(_bookId);
+      BookModel? book;
+
+      // Use provided book if available, otherwise fetch by ID
+      if (widget.book != null) {
+        book = widget.book;
+      } else if (widget.bookId != null) {
+        book = await _bookService.getBookById(widget.bookId!);
+      }
+
       if (book != null) {
         setState(() {
           _book = book;
-          _isFavorite = false; // Simplified for now
         });
       } else {
         setState(() {
-          _errorMessage = 'Kitap bulunamadı.';
+          _error = 'Kitap bulunamadı';
         });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Kitap yüklenirken bir hata oluştu: $e';
+        _error = 'Kitap yüklenirken hata oluştu: $e';
       });
     } finally {
       setState(() {
@@ -83,8 +93,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    if (_errorMessage != null) {
-      return _buildErrorState(_errorMessage!);
+    if (_error != null) {
+      return _buildErrorState(_error!);
     }
 
     if (_isLoading) {
@@ -98,7 +108,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     return _buildBookDetail(_book!);
   }
 
-  Widget _buildBookDetail(Book book) {
+  Widget _buildBookDetail(BookModel book) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -123,8 +133,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           actions: [
             IconButton(
               icon: Icon(
-                _isFavorite ? Icons.favorite : Icons.favorite_border,
-                color: _isFavorite ? Colors.red : colorScheme.onSurface,
+                _isTogglingFavorite ? Icons.favorite : Icons.favorite_border,
+                color: _isTogglingFavorite ? Colors.red : colorScheme.onSurface,
               ),
               onPressed: () => _toggleFavorite(book),
             ),
@@ -145,7 +155,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
   }
 
-  Widget _buildBookCover(Book book) {
+  Widget _buildBookCover(BookModel book) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -208,7 +218,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
   }
 
-  Widget _buildBookInfo(Book book) {
+  Widget _buildBookInfo(BookModel book) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -288,12 +298,12 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       setState(() {
-                        _isFavorite = !_isFavorite;
+                        _isTogglingFavorite = !_isTogglingFavorite;
                       });
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            _isFavorite
+                            _isTogglingFavorite
                                 ? 'Favorilere eklendi'
                                 : 'Favorilerden çıkarıldı',
                           ),
@@ -301,10 +311,14 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                       );
                     },
                     icon: Icon(
-                      _isFavorite ? Icons.favorite : Icons.favorite_border,
+                      _isTogglingFavorite
+                          ? Icons.favorite
+                          : Icons.favorite_border,
                     ),
                     label: Text(
-                      _isFavorite ? 'Favorilerden Çıkar' : 'Favorilere Ekle',
+                      _isTogglingFavorite
+                          ? 'Favorilerden Çıkar'
+                          : 'Favorilere Ekle',
                     ),
                   ),
                 ),
@@ -382,7 +396,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
   }
 
-  Widget _buildBookDetails(Book book) {
+  Widget _buildBookDetails(BookModel book) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -428,7 +442,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
   }
 
-  Widget _buildActionButtons(Book book) {
+  Widget _buildActionButtons(BookModel book) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         if (!authProvider.isLoggedIn) {
@@ -443,12 +457,12 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               child: ElevatedButton.icon(
                 onPressed: () {
                   setState(() {
-                    _isFavorite = !_isFavorite;
+                    _isTogglingFavorite = !_isTogglingFavorite;
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        _isFavorite
+                        _isTogglingFavorite
                             ? 'Favorilere eklendi'
                             : 'Favorilerden çıkarıldı',
                       ),
@@ -456,10 +470,12 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   );
                 },
                 icon: Icon(
-                  _isFavorite ? Icons.favorite : Icons.favorite_border,
+                  _isTogglingFavorite ? Icons.favorite : Icons.favorite_border,
                 ),
                 label: Text(
-                  _isFavorite ? 'Favorilerden Çıkar' : 'Favorilere Ekle',
+                  _isTogglingFavorite
+                      ? 'Favorilerden Çıkar'
+                      : 'Favorilere Ekle',
                 ),
               ),
             ),
@@ -600,15 +616,15 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   }
 
   // Action Methods
-  void _toggleFavorite(Book book) {
+  void _toggleFavorite(BookModel book) {
     setState(() {
-      _isFavorite = !_isFavorite;
+      _isTogglingFavorite = !_isTogglingFavorite;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _isFavorite ? 'Favorilere eklendi' : 'Favorilerden çıkarıldı',
+          _isTogglingFavorite ? 'Favorilere eklendi' : 'Favorilerden çıkarıldı',
         ),
         duration: const Duration(seconds: 2),
       ),
@@ -616,7 +632,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   }
 
   Future<void> _toggleCart(
-    Book book,
+    BookModel book,
     String userId,
     bool isCurrentlyInCart,
   ) async {
@@ -672,7 +688,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     }
   }
 
-  void _handlePrimaryAction(Book book) {
+  void _handlePrimaryAction(BookModel book) {
     if (book.price == 0) {
       // Free book - start reading
       _startReading(book);
@@ -682,7 +698,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     }
   }
 
-  void _startReading(Book book) async {
+  void _startReading(BookModel book) async {
     final authProvider = context.read<AuthProvider>();
 
     if (!authProvider.isLoggedIn) {
@@ -697,8 +713,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       try {
         final purchaseService = PurchaseService();
         final isPurchased = await purchaseService.hasUserPurchasedBook(
-          userId: authProvider.currentUser!.uid,
-          bookId: book.id,
+          authProvider.currentUser!.uid,
+          book.id,
         );
 
         if (!isPurchased) {
@@ -769,7 +785,7 @@ Sayfa ${index + 1} sonu.
     );
   }
 
-  void _purchaseBook(Book book) async {
+  void _purchaseBook(BookModel book) async {
     final authProvider = context.read<AuthProvider>();
 
     if (!authProvider.isLoggedIn) {
@@ -810,7 +826,6 @@ Sayfa ${index + 1} sonu.
       context: context,
       builder: (context) => PurchaseConfirmationDialog(
         book: bookModel,
-        usePoints: false,
         onConfirm: () => Navigator.of(context).pop(true),
         onCancel: () => Navigator.of(context).pop(false),
       ),
@@ -831,8 +846,6 @@ Sayfa ${index + 1} sonu.
       final success = await purchaseService.purchaseWithTL(
         userId: authProvider.currentUser!.uid,
         book: bookModel,
-        amount: book.price,
-        paymentProvider: 'demo',
       );
 
       // Close loading dialog
@@ -870,7 +883,7 @@ Sayfa ${index + 1} sonu.
     }
   }
 
-  Future<void> _addToCart(Book book) async {
+  Future<void> _addToCart(BookModel book) async {
     final authProvider = context.read<AuthProvider>();
     if (!authProvider.isLoggedIn) {
       Navigator.of(context).pushNamed('/login');
@@ -939,7 +952,7 @@ Sayfa ${index + 1} sonu.
   }
 
   /// Check if book is already in cart
-  Future<bool> _isBookInCart(Book book, String userId) async {
+  Future<bool> _isBookInCart(BookModel book, String userId) async {
     try {
       final cartItems = await _cartService.getCartItems(userId);
       return cartItems.any((item) => item.bookId == book.id);
@@ -948,14 +961,14 @@ Sayfa ${index + 1} sonu.
     }
   }
 
-  void _previewBook(Book book) {
+  void _previewBook(BookModel book) {
     // Navigate to preview reading screen
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => PreviewReadingScreen(book: book)),
     );
   }
 
-  void _shareBook(Book book) {
+  void _shareBook(BookModel book) {
     // Import share_plus at the top if not already imported
     final String shareText =
         '''

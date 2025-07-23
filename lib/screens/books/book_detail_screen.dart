@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../models/book_model.dart';
-import '../../providers/book_provider.dart';
+import 'package:provider/provider.dart';
+
 import '../../providers/auth_provider.dart';
-import '../../providers/rating_provider.dart';
-import '../../widgets/books/book_card.dart';
-import 'package:go_router/go_router.dart';
-import "../../widgets/books/book_purchase_button.dart";
+import '../../providers/cart_provider.dart';
+import '../../providers/favorites_provider.dart';
+import '../../widgets/auth/auth_wrapper.dart';
 import '../../widgets/books/preview_reader.dart';
-import '../../widgets/comments/book_comments_section.dart';
-import '../../widgets/rating/star_rating_widget.dart';
-import '../../models/rating_model.dart';
-import '../../services/advanced_share_service.dart';
-import 'reading_screen.dart';
-import '../../widgets/purchase/purchase_confirmation_dialog.dart';
+import '../../widgets/widgets.dart'; // Import all custom widgets
+import '../../services/book_service.dart';
+import '../../services/cart_service.dart';
+import '../../services/favorites_service.dart';
+import '../../services/share_service.dart';
 import '../../services/purchase_service.dart';
-import '../../widgets/rating/rating_display_widget.dart';
+import '../../models/book_model.dart';
+import '../../constants/app_colors.dart';
+import '../../constants/app_themes.dart';
+import '../../screens/books/reading_screen.dart';
+import '../../screens/books/preview_reading_screen.dart';
+import '../../dialogs/purchase_confirmation_dialog.dart';
 
 /// Kitap detay ekranı - kitap hakkında detaylı bilgi gösterir
 class BookDetailScreen extends StatefulWidget {

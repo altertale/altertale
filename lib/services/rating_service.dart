@@ -1,263 +1,323 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/rating_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
 
 class RatingService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static const String _ratingsCollection = 'ratings';
-  static const String _bookStatsCollection = 'book_rating_stats';
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final AuthService _authService = AuthService();
 
-  // Submit or update a rating
-  static Future<bool> submitRating({
+  // Cache for user ratings
+  final Map<String, double> _userRatings = {};
+  bool _ratingsLoaded = false;
+
+  /// Initialize user ratings
+  Future<void> initializeRatings() async {
+    if (_ratingsLoaded) return;
+
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      // Load from SharedPreferences first
+      final prefs = await SharedPreferences.getInstance();
+      final ratingsString = prefs.getString('user_ratings_$userId');
+
+      if (ratingsString != null) {
+        final ratingsMap = Map<String, dynamic>.from(
+          Uri.splitQueryString(ratingsString),
+        );
+        ratingsMap.forEach((bookId, rating) {
+          _userRatings[bookId] = double.tryParse(rating) ?? 0.0;
+        });
+        print('⭐ Loaded ${_userRatings.length} ratings from local storage');
+      }
+
+      // Try to load from Firestore and merge
+      final userRatingsDoc = await _firestore
+          .collection('userRatings')
+          .doc(userId)
+          .get();
+
+      if (userRatingsDoc.exists) {
+        final data = userRatingsDoc.data() as Map<String, dynamic>;
+        final remoteRatings = Map<String, double>.from(
+          data['ratings']?.map((k, v) => MapEntry(k, (v as num).toDouble())) ??
+              {},
+        );
+
+        // Merge with local ratings
+        _userRatings.addAll(remoteRatings);
+
+        // Save merged ratings to local storage
+        await _saveRatingsToLocal(userId);
+
+        print('⭐ Merged with remote ratings, total: ${_userRatings.length}');
+      }
+
+      _ratingsLoaded = true;
+    } catch (e) {
+      print('❌ Error loading ratings: $e');
+      _ratingsLoaded = true;
+    }
+  }
+
+  /// Rate a book
+  Future<bool> rateBook(String bookId, double rating) async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) {
+      throw Exception('Kullanıcı girişi gerekli');
+    }
+
+    if (rating < 1.0 || rating > 5.0) {
+      throw Exception('Puan 1-5 arasında olmalıdır');
+    }
+
+    try {
+      await initializeRatings();
+
+      // Store old rating for potential rollback
+      final oldRating = _userRatings[bookId];
+
+      // Update local cache immediately
+      _userRatings[bookId] = rating;
+
+      // Save to local storage immediately
+      await _saveRatingsToLocal(userId);
+
+      // Update Firestore
+      await _firestore.collection('userRatings').doc(userId).set({
+        'ratings': _userRatings,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Update book's average rating
+      await _updateBookRating(bookId, rating, oldRating);
+
+      print('⭐ Book rated successfully: $bookId = $rating stars');
+      return true;
+    } catch (e) {
+      // Rollback local changes on error
+      if (_userRatings.containsKey(bookId)) {
+        _userRatings.remove(bookId);
+      }
+      print('❌ Error rating book: $e');
+      throw Exception('Puanlama işlemi başarısız: $e');
+    }
+  }
+
+  /// Update book's average rating
+  Future<void> _updateBookRating(
+    String bookId,
+    double newRating,
+    double? oldRating,
+  ) async {
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final bookRef = _firestore.collection('books').doc(bookId);
+        final bookDoc = await transaction.get(bookRef);
+
+        if (!bookDoc.exists) {
+          // Create rating document if book doesn't exist in Firestore
+          transaction.set(_firestore.collection('bookRatings').doc(bookId), {
+            'totalRating': newRating,
+            'ratingCount': 1,
+            'averageRating': newRating,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+
+        final data = bookDoc.data() as Map<String, dynamic>;
+        final currentTotal = (data['totalRating'] ?? 0.0) as double;
+        final currentCount = (data['ratingCount'] ?? 0) as int;
+
+        double newTotal;
+        int newCount;
+
+        if (oldRating != null) {
+          // User is updating their rating
+          newTotal = currentTotal - oldRating + newRating;
+          newCount = currentCount; // Count stays the same
+        } else {
+          // User is rating for the first time
+          newTotal = currentTotal + newRating;
+          newCount = currentCount + 1;
+        }
+
+        final newAverage = newCount > 0 ? newTotal / newCount : 0.0;
+
+        transaction.update(bookRef, {
+          'totalRating': newTotal,
+          'ratingCount': newCount,
+          'averageRating': newAverage,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+
+        print(
+          '⭐ Updated book rating: $bookId - Average: ${newAverage.toStringAsFixed(1)} (${newCount} ratings)',
+        );
+      });
+    } catch (e) {
+      print('❌ Error updating book rating: $e');
+      // Non-critical error, don't throw
+    }
+  }
+
+  /// Save ratings to local storage
+  Future<void> _saveRatingsToLocal(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ratingsString = _userRatings.entries
+          .map((e) => '${e.key}=${e.value}')
+          .join('&');
+      await prefs.setString('user_ratings_$userId', ratingsString);
+    } catch (e) {
+      print('❌ Error saving ratings to local storage: $e');
+    }
+  }
+
+  /// Get user's rating for a book
+  Future<double?> getUserRating(String userId, String bookId) async {
+    await initializeRatings();
+    return _userRatings[bookId];
+  }
+
+  /// Check if user has rated a book
+  Future<bool> hasUserRated(String bookId) async {
+    final rating = await getUserRating(
+      _authService.currentUser?.uid ?? '',
+      bookId,
+    );
+    return rating != null;
+  }
+
+  /// Get all user ratings
+  Future<Map<String, double>> getAllUserRatings() async {
+    await initializeRatings();
+    return Map.from(_userRatings);
+  }
+
+  /// Remove rating (for testing)
+  Future<void> removeRating(String bookId) async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      final oldRating = _userRatings[bookId];
+      if (oldRating == null) return;
+
+      // Remove from local cache
+      _userRatings.remove(bookId);
+
+      // Save to local storage
+      await _saveRatingsToLocal(userId);
+
+      // Update Firestore
+      await _firestore.collection('userRatings').doc(userId).set({
+        'ratings': _userRatings,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      print('⭐ Rating removed for book: $bookId');
+    } catch (e) {
+      print('❌ Error removing rating: $e');
+    }
+  }
+
+  /// Clear all ratings (for logout)
+  void clearCache() async {
+    _userRatings.clear();
+    _ratingsLoaded = false;
+
+    try {
+      final userId = _authService.currentUser?.uid;
+      if (userId != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('user_ratings_$userId');
+      }
+    } catch (e) {
+      print('❌ Error clearing ratings cache: $e');
+    }
+  }
+
+  /// Get book rating statistics
+  Future<Map<String, dynamic>> getBookRatingStats(String bookId) async {
+    try {
+      final ratingDoc = await _firestore
+          .collection('bookRatings')
+          .doc(bookId)
+          .get();
+
+      if (ratingDoc.exists) {
+        final data = ratingDoc.data() as Map<String, dynamic>;
+        return {
+          'averageRating': (data['averageRating'] ?? 0.0) as double,
+          'ratingCount': (data['ratingCount'] ?? 0) as int,
+          'totalRating': (data['totalRating'] ?? 0.0) as double,
+        };
+      }
+
+      return {'averageRating': 0.0, 'ratingCount': 0, 'totalRating': 0.0};
+    } catch (e) {
+      print('❌ Error getting book rating stats: $e');
+      return {'averageRating': 0.0, 'ratingCount': 0, 'totalRating': 0.0};
+    }
+  }
+
+  /// Submit a rating for a book
+  Future<bool> submitRating({
     required String userId,
     required String bookId,
     required double rating,
   }) async {
     try {
-      // Validate rating
-      if (rating < 1.0 || rating > 5.0) {
-        throw ArgumentError('Rating must be between 1.0 and 5.0');
-      }
-
-      // Check if user already rated this book
-      final existingRatingQuery = await _firestore
-          .collection(_ratingsCollection)
-          .where('userId', isEqualTo: userId)
-          .where('bookId', isEqualTo: bookId)
-          .limit(1)
-          .get();
-
-      if (existingRatingQuery.docs.isNotEmpty) {
-        // Update existing rating
-        final existingDoc = existingRatingQuery.docs.first;
-        final oldRating = existingDoc.data()['rating'].toDouble();
-
-        await existingDoc.reference.update({
-          'rating': rating,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        // Update book stats
-        await _updateBookRatingStats(bookId, oldRating, rating, isUpdate: true);
-      } else {
-        // Create new rating
-        await _firestore.collection(_ratingsCollection).add({
-          'userId': userId,
-          'bookId': bookId,
-          'rating': rating,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': null,
-        });
-
-        // Update book stats
-        await _updateBookRatingStats(bookId, 0.0, rating, isUpdate: false);
-      }
-
+      await rateBook(bookId, rating);
       return true;
     } catch (e) {
-      print('Error submitting rating: $e');
+      print('❌ Error submitting rating: $e');
       return false;
     }
   }
 
-  // Get user's rating for a specific book
-  static Future<Rating?> getUserRating(String userId, String bookId) async {
-    try {
-      final query = await _firestore
-          .collection(_ratingsCollection)
-          .where('userId', isEqualTo: userId)
-          .where('bookId', isEqualTo: bookId)
-          .limit(1)
-          .get();
-
-      if (query.docs.isNotEmpty) {
-        return Rating.fromFirestore(query.docs.first);
+  /// Stream book rating statistics
+  Stream<Map<String, dynamic>> streamBookRatingStats(String bookId) {
+    return _firestore.collection('bookRatings').doc(bookId).snapshots().map((
+      snapshot,
+    ) {
+      if (snapshot.exists) {
+        final data = snapshot.data() as Map<String, dynamic>;
+        return {
+          'averageRating': (data['averageRating'] ?? 0.0) as double,
+          'ratingCount': (data['ratingCount'] ?? 0) as int,
+          'totalRating': (data['totalRating'] ?? 0.0) as double,
+        };
       }
-      return null;
-    } catch (e) {
-      print('Error getting user rating: $e');
-      return null;
-    }
+      return {'averageRating': 0.0, 'ratingCount': 0, 'totalRating': 0.0};
+    });
   }
 
-  // Get book rating statistics
-  static Future<BookRatingStats> getBookRatingStats(String bookId) async {
+  /// Get top rated books
+  Future<List<Map<String, dynamic>>> getTopRatedBooks({int limit = 10}) async {
     try {
-      final doc = await _firestore
-          .collection(_bookStatsCollection)
-          .doc(bookId)
-          .get();
-
-      if (doc.exists) {
-        return BookRatingStats.fromMap(doc.data()!);
-      } else {
-        return BookRatingStats.empty(bookId);
-      }
-    } catch (e) {
-      print('Error getting book rating stats: $e');
-      return BookRatingStats.empty(bookId);
-    }
-  }
-
-  // Get all ratings for a book
-  static Future<List<Rating>> getBookRatings(
-    String bookId, {
-    int limit = 50,
-  }) async {
-    try {
-      final query = await _firestore
-          .collection(_ratingsCollection)
-          .where('bookId', isEqualTo: bookId)
-          .orderBy('createdAt', descending: true)
-          .limit(limit)
-          .get();
-
-      return query.docs.map((doc) => Rating.fromFirestore(doc)).toList();
-    } catch (e) {
-      print('Error getting book ratings: $e');
-      return [];
-    }
-  }
-
-  // Update book rating statistics
-  static Future<void> _updateBookRatingStats(
-    String bookId,
-    double oldRating,
-    double newRating, {
-    required bool isUpdate,
-  }) async {
-    try {
-      final docRef = _firestore.collection(_bookStatsCollection).doc(bookId);
-
-      await _firestore.runTransaction((transaction) async {
-        final doc = await transaction.get(docRef);
-
-        if (doc.exists) {
-          final data = doc.data()!;
-          final currentAvg = (data['averageRating'] ?? 0.0).toDouble();
-          final currentTotal = data['totalRatings'] ?? 0;
-          final distribution = Map<int, int>.from(
-            data['ratingDistribution'] ?? {},
-          );
-
-          double newAvg;
-          int newTotal;
-
-          if (isUpdate) {
-            // Update existing rating
-            final totalSum = currentAvg * currentTotal;
-            final newSum = totalSum - oldRating + newRating;
-            newAvg = newSum / currentTotal;
-            newTotal = currentTotal;
-
-            // Update distribution
-            if (oldRating > 0) {
-              distribution[oldRating.round()] =
-                  (distribution[oldRating.round()] ?? 0) - 1;
-            }
-            distribution[newRating.round()] =
-                (distribution[newRating.round()] ?? 0) + 1;
-          } else {
-            // New rating
-            final totalSum = currentAvg * currentTotal;
-            final newSum = totalSum + newRating;
-            newTotal = currentTotal + 1;
-            newAvg = newSum / newTotal;
-
-            // Update distribution
-            distribution[newRating.round()] =
-                (distribution[newRating.round()] ?? 0) + 1;
-          }
-
-          transaction.update(docRef, {
-            'averageRating': newAvg,
-            'totalRatings': newTotal,
-            'ratingDistribution': distribution,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        } else {
-          // Create new stats document
-          transaction.set(docRef, {
-            'bookId': bookId,
-            'averageRating': newRating,
-            'totalRatings': 1,
-            'ratingDistribution': {
-              1: newRating.round() == 1 ? 1 : 0,
-              2: newRating.round() == 2 ? 1 : 0,
-              3: newRating.round() == 3 ? 1 : 0,
-              4: newRating.round() == 4 ? 1 : 0,
-              5: newRating.round() == 5 ? 1 : 0,
-            },
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        }
-      });
-    } catch (e) {
-      print('Error updating book rating stats: $e');
-    }
-  }
-
-  // Stream book rating stats for real-time updates
-  static Stream<BookRatingStats> streamBookRatingStats(String bookId) {
-    return _firestore
-        .collection(_bookStatsCollection)
-        .doc(bookId)
-        .snapshots()
-        .map((doc) {
-          if (doc.exists) {
-            return BookRatingStats.fromMap(doc.data()!);
-          } else {
-            return BookRatingStats.empty(bookId);
-          }
-        });
-  }
-
-  // Get top rated books
-  static Future<List<String>> getTopRatedBooks({int limit = 10}) async {
-    try {
-      final query = await _firestore
-          .collection(_bookStatsCollection)
-          .where('totalRatings', isGreaterThan: 0)
-          .orderBy('totalRatings', descending: false)
+      final querySnapshot = await _firestore
+          .collection('bookRatings')
+          .where('ratingCount', isGreaterThan: 0)
           .orderBy('averageRating', descending: true)
           .limit(limit)
           .get();
 
-      return query.docs.map((doc) => doc.data()['bookId'] as String).toList();
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'bookId': doc.id,
+          'averageRating': (data['averageRating'] ?? 0.0) as double,
+          'ratingCount': (data['ratingCount'] ?? 0) as int,
+          'totalRating': (data['totalRating'] ?? 0.0) as double,
+        };
+      }).toList();
     } catch (e) {
-      print('Error getting top rated books: $e');
+      print('❌ Error getting top rated books: $e');
       return [];
     }
-  }
-
-  // Delete a rating (for admin/moderation)
-  static Future<bool> deleteRating(String ratingId) async {
-    try {
-      await _firestore.collection(_ratingsCollection).doc(ratingId).delete();
-      return true;
-    } catch (e) {
-      print('Error deleting rating: $e');
-      return false;
-    }
-  }
-
-  // Local cache methods for offline support
-  static const String _localRatingsKey = 'pending_ratings';
-
-  // Cache rating locally when offline
-  static Future<void> cacheRatingLocally({
-    required String userId,
-    required String bookId,
-    required double rating,
-  }) async {
-    // Implementation depends on local storage preference
-    // This is a placeholder for SharedPreferences or Hive implementation
-    print('Caching rating locally: $bookId -> $rating');
-  }
-
-  // Sync cached ratings when online
-  static Future<void> syncCachedRatings() async {
-    // Implementation for syncing offline ratings
-    print('Syncing cached ratings...');
   }
 }
